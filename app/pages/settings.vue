@@ -42,14 +42,7 @@ async function saveSettings() {
   }
 }
 
-const modelOptions = [
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Recommended)' },
-  { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-  { value: 'claude-3-sonnet', label: 'Claude 3 Sonnet' },
-  { value: 'claude-3-opus', label: 'Claude 3 Opus' },
-]
+
 </script>
 
 <template>
@@ -109,14 +102,15 @@ const modelOptions = [
 
           <div>
             <label class="block text-sm font-medium mb-2">Model</label>
-            <select
+            <input
               v-model="settings.aiModel"
+              type="text"
+              placeholder="gpt-4o-mini"
               class="w-full bg-secondary/50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-ring transition-all"
-            >
-              <option v-for="opt in modelOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
+            />
+            <p class="text-xs text-muted-foreground mt-2">
+              Enter any model name, e.g. gpt-4o-mini, claude-3-sonnet, deepseek-chat, etc.
+            </p>
           </div>
         </div>
       </section>

@@ -1,11 +1,11 @@
 import { prisma } from '../../utils/prisma'
 export default defineEventHandler(async (event) => {
     const body = await readBody(event)
-    return await prisma.kanbanTask.create({
+    return await prisma.project.create({
         data: {
-            title: body.title,
+            name: body.name,
             description: body.description,
-            status: body.status || 'Todo',
+            status: body.status || 'PLANNING',
             order: body.order || 0
         }
     })

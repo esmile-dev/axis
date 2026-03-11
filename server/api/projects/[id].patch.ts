@@ -5,11 +5,13 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Missing ID' })
     }
     const body = await readBody(event)
-    return await prisma.todoItem.update({
+    return await prisma.project.update({
         where: { id },
         data: {
-            title: body.title,
-            completed: body.completed
+            name: body.name,
+            description: body.description,
+            status: body.status,
+            order: body.order
         }
     })
 })

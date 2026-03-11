@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Command, Search, Inbox, CheckSquare, Kanban, BookOpen, Plus } from 'lucide-vue-next'
+import { Command, Search, Inbox, CheckSquare, BookOpen, Plus, FolderKanban } from 'lucide-vue-next'
 
 const isOpen = ref(false)
 const searchQuery = ref('')
@@ -8,7 +8,7 @@ const inputRef = ref<HTMLInputElement | null>(null)
 const commands = [
   { id: 'inbox', label: 'Quick capture to Inbox', icon: Inbox, action: 'capture', color: 'text-blue-500' },
   { id: 'todo', label: 'Create new Todo', icon: CheckSquare, action: 'todo', color: 'text-green-500' },
-  { id: 'kanban', label: 'Create Kanban task', icon: Kanban, action: 'kanban', color: 'text-yellow-500' },
+  { id: 'project', label: 'Create new Project', icon: FolderKanban, action: 'project', color: 'text-indigo-500' },
   { id: 'knowledge', label: 'Create Knowledge doc', icon: BookOpen, action: 'knowledge', color: 'text-purple-500' },
 ]
 
@@ -21,7 +21,7 @@ const filteredCommands = computed(() => {
 const emit = defineEmits<{
   (e: 'capture', value: string): void
   (e: 'create-todo'): void
-  (e: 'create-kanban'): void
+  (e: 'create-project'): void
   (e: 'create-knowledge'): void
 }>()
 
@@ -41,8 +41,8 @@ function executeCommand(cmd: typeof commands[0]) {
     emit('capture', searchQuery.value)
   } else if (cmd.action === 'todo') {
     emit('create-todo')
-  } else if (cmd.action === 'kanban') {
-    emit('create-kanban')
+  } else if (cmd.action === 'project') {
+    emit('create-project')
   } else if (cmd.action === 'knowledge') {
     emit('create-knowledge')
   }

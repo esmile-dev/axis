@@ -5,13 +5,17 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Missing ID' })
     }
     const body = await readBody(event)
-    return await prisma.kanbanTask.update({
+    return await prisma.issue.update({
         where: { id },
         data: {
             title: body.title,
             description: body.description,
             status: body.status,
-            order: body.order
+            priority: body.priority,
+            type: body.type,
+            order: body.order,
+            attachment: body.attachment,
+            projectId: body.projectId
         }
     })
 })

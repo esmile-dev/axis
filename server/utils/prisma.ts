@@ -11,7 +11,7 @@ const prismaClientSingleton = () => {
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
   }
-  const adapter = new PrismaPg(poolConfig)
+  const adapter = new PrismaPg(poolConfig, { schema: 'axis' })
   return new PrismaClient({ adapter })
 }
 

@@ -1,64 +1,77 @@
 <script setup lang="ts">
 import { Trash2, CheckCircle2, Circle, Cloud, CloudOff } from 'lucide-vue-next'
+import { useMagicKeys } from '@vueuse/core'
+import IssueCreator from '@/components/IssueCreator.vue'
+import IssueDetail from '@/components/IssueDetail.vue'
 
-interface TodoItem {
-  id: string
-  title: string
-  completed: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-const localFirst = useLocalFirst<TodoItem>('todo', () => $fetch<TodoItem[]>('/api/todo'))
+const localFirst = useLocalFirst('issues-todo', async () => {
+    return await $fetch('/api/issues', { query: { projectId: 'none' } });
+})
 const optimistic = useOptimistic(localFirst)
 
-const newTodoTitle = ref('')
+const isCreatorOpen = ref(false)
+const isDetailOpen = ref(false)
+const selectedIssueId = ref<string | null>(null)
 
-function generateTempId(): string {
-  return `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-}
+const { c } = useMagicKeys()
 
-async function addTodo() {
-  if (!newTodoTitle.value.trim()) return
-  
-  const tempItem: TodoItem = {
+watch(() => c?.value, (v) => {
+  if (v && !isCreatorOpen.value) {
+    // Only open if not typing in an input
+    const activeElement = document.activeElement
+    const isInput = activeElement && ['INPUT', 'TEXTAREA'].includes(activeElement.tagName)
+    if (!isInput) {
+      isCreatorOpen.value = true
+    }
+  }
+})
+
+async function handleCreateIssue(payload: any) {
+  const tempItem = {
     id: generateTempId(),
-    title: newTodoTitle.value,
-    completed: false,
+    ...payload,
+    status: payload.status || 'TODO',
+    priority: payload.priority || 'NONE',
+    type: payload.type || 'FEATURE',
+    order: 0,
+    projectId: payload.projectId || null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }
   
-  newTodoTitle.value = ''
-  
   await optimistic.optimisticAdd(
-    async (item) => {
-      return await $fetch<TodoItem>('/api/todo', {
+    async (item: any) => {
+      return await $fetch('/api/issues', {
         method: 'POST',
-        body: { title: item.title }
+        body: payload
       })
     },
     tempItem
   )
 }
 
-async function toggleTodo(todo: TodoItem) {
+function generateTempId(): string {
+  return `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+}
+
+async function toggleTodo(issue: any) {
+  const newStatus = issue.status === 'DONE' ? 'TODO' : 'DONE'
   await optimistic.optimisticUpdate(
-    async (id, updates) => {
-      return await $fetch<TodoItem>(`/api/todo/${id}`, {
+    async (id: string, updates: any) => {
+      return await $fetch(`/api/issues/${id}`, {
         method: 'PATCH',
         body: updates
       })
     },
-    todo.id,
-    { completed: !todo.completed }
+    issue.id,
+    { status: newStatus }
   )
 }
 
 async function deleteTodo(id: string) {
   await optimistic.optimisticDelete(
     async (itemId) => {
-      await $fetch(`/api/todo/${itemId}`, { method: 'DELETE' })
+      await $fetch(`/api/issues/${itemId}`, { method: 'DELETE' })
     },
     id
   )
@@ -81,44 +94,46 @@ onMounted(() => localFirst.init())
       </div>
     </header>
 
-    <div class="relative mb-8 group">
-      <input
-        v-model="newTodoTitle"
-        @keyup.enter="addTodo"
-        type="text"
-        placeholder="Add a new task..."
-        class="w-full bg-secondary/50 border-none rounded-xl px-6 py-4 text-lg focus:ring-2 focus:ring-ring transition-all placeholder:text-muted-foreground"
-      />
+    <div class="mb-8 flex justify-center">
+      <IssueCreator v-model:open="isCreatorOpen" @create="handleCreateIssue">
+        <button class="w-full bg-secondary/50 border-none rounded-xl px-6 py-4 text-lg text-left text-muted-foreground hover:bg-secondary/70 transition-all flex items-center justify-between group">
+          <span>Add a new task...</span>
+          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span class="text-xs bg-background px-2 py-1 rounded shadow-sm border border-border">Press C</span>
+          </div>
+        </button>
+      </IssueCreator>
     </div>
 
     <div class="space-y-2">
       <TransitionGroup name="list">
         <div
-          v-for="todo in localFirst.items.value"
-          :key="todo.id"
+          v-for="issue in localFirst.items.value"
+          :key="issue.id"
           class="flex items-center gap-4 p-4 bg-card rounded-xl border border-border group transition-all hover:bg-accent/50"
-          :class="{ 'opacity-50': optimistic.isPending(todo.id) }"
+          :class="{ 'opacity-50': optimistic.isPending(issue.id) }"
         >
           <button 
-            @click="toggleTodo(todo)" 
-            :disabled="optimistic.isPending(todo.id)"
-            class="text-muted-foreground hover:text-primary transition-colors"
+            @click.stop="toggleTodo(issue)" 
+            :disabled="optimistic.isPending(issue.id)"
+            class="text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
           >
-            <CheckCircle2 v-if="todo.completed" class="w-5 h-5 text-green-500" />
+            <CheckCircle2 v-if="issue.status === 'DONE'" class="w-5 h-5 text-green-500" />
             <Circle v-else class="w-5 h-5" />
           </button>
           
-          <span
-            class="flex-1 text-sm transition-all"
-            :class="{ 'line-through text-muted-foreground': todo.completed }"
+          <button
+            class="flex-1 text-sm transition-all text-left truncate"
+            :class="{ 'line-through text-muted-foreground': issue.status === 'DONE' }"
+            @click="selectedIssueId = issue.id; isDetailOpen = true"
           >
-            {{ todo.title }}
-          </span>
+            {{ issue.title }}
+          </button>
 
           <button
-            @click="deleteTodo(todo.id)"
-            :disabled="optimistic.isPending(todo.id)"
-            class="opacity-0 group-hover:opacity-100 p-2 text-muted-foreground hover:text-destructive transition-all"
+            @click.stop="deleteTodo(issue.id)"
+            :disabled="optimistic.isPending(issue.id)"
+            class="opacity-0 group-hover:opacity-100 p-2 text-muted-foreground hover:text-destructive transition-all flex-shrink-0"
           >
             <Trash2 class="w-4 h-4" />
           </button>
@@ -128,8 +143,11 @@ onMounted(() => localFirst.init())
       <div v-if="localFirst.items.value.length === 0" class="text-center py-20 text-muted-foreground">
         <CheckCircle2 class="w-12 h-12 mx-auto mb-4 opacity-20" />
         <p>All caught up! Nothing to do right now.</p>
+        <p class="text-sm mt-2 opacity-50">Press <kbd class="px-2 py-0.5 bg-secondary/50 rounded-md border border-border">C</kbd> to create a new task</p>
       </div>
     </div>
+
+    <IssueDetail v-model:open="isDetailOpen" :issue-id="selectedIssueId" />
   </div>
 </template>
 

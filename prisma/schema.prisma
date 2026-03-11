@@ -14,22 +14,67 @@ model InboxItem {
   updatedAt DateTime @updatedAt
 }
 
-model TodoItem {
-  id        String   @id @default(cuid())
-  title     String
-  completed Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+
+
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+  ARCHIVED
 }
 
-model KanbanTask {
-  id          String   @id @default(cuid())
+enum IssueStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum IssuePriority {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum IssueType {
+  BUG
+  FEATURE
+  IMPROVEMENT
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(PLANNING)
+  order       Int           @default(0)
+  issues      Issue[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Issue {
+  id          String        @id @default(cuid())
   title       String
   description String?
-  status      String   @default("Todo")
-  order       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      IssueStatus   @default(TODO)
+  priority    IssuePriority @default(MEDIUM)
+  type        IssueType     @default(FEATURE)
+  order       Int           @default(0)
+  projectId   String?
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attachment  String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  comments    Comment[]
+
+  @@index([projectId])
+  @@index([status])
 }
 
 model KnowledgeDocument {
@@ -38,4 +83,15 @@ model KnowledgeDocument {
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  issueId   String
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([issueId])
 }
