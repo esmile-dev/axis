@@ -1,17 +1,11 @@
 import { PrismaClient } from '../../app/generated/prisma/client'
+import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
-import type { PoolConfig } from 'pg'
 
 const prismaClientSingleton = () => {
-  const poolConfig: PoolConfig = {
-    connectionString: process.env.DATABASE_URL!,
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
-    keepAlive: true,
-    keepAliveInitialDelayMillis: 10000,
-  }
-  const adapter = new PrismaPg(poolConfig, { schema: 'axis' })
+  const connectionString = process.env.DATABASE_URL!
+  const pool = new Pool({ connectionString })
+  const adapter = new PrismaPg(pool)
   return new PrismaClient({ adapter })
 }
 
