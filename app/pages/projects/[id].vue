@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, GripVertical, Sparkles, Cloud, CloudOff, ArrowLeft, Bug, Lightbulb, Wrench, AlertCircle, Circle, Clock, CheckCircle } from 'lucide-vue-next'
+import { Plus, GripVertical, Sparkles, Cloud, CloudOff, ArrowLeft, Bug, Lightbulb, Wrench, AlertCircle, Circle, CircleDot, CircleCheck } from 'lucide-vue-next'
 
 type IssueStatus = 'TODO' | 'IN_PROGRESS' | 'DONE'
 type IssuePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
@@ -44,6 +44,12 @@ const columns: { status: string; label: string; color: string }[] = [
   { status: 'DONE', label: 'Done', color: 'bg-green-500' }
 ]
 
+const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
+  TODO: { label: 'Todo', color: 'text-gray-400', icon: Circle },
+  IN_PROGRESS: { label: 'In Progress', color: 'text-yellow-400', icon: CircleDot },
+  DONE: { label: 'Done', color: 'text-green-400', icon: CircleCheck }
+}
+
 const priorityConfig: Record<string, { label: string; color: string; icon: any }> = {
   LOW: { label: 'Low', color: 'text-gray-400', icon: Circle },
   MEDIUM: { label: 'Medium', color: 'text-blue-400', icon: Circle },
@@ -76,10 +82,10 @@ const draggedIssue = ref<Issue | null>(null)
 const dragOverColumn = ref<string | null>(null)
 
 const showSlidePanel = ref(false)
-const editingIssue = ref<Issue | null>(null)
-const editForm = ref({ 
-  title: '', 
-  description: '', 
+const isSaving = ref(false)
+const editForm = ref({
+  title: '',
+  description: '',
   priority: 'MEDIUM' as IssuePriority,
   type: 'FEATURE' as IssueType
 })
@@ -89,62 +95,35 @@ function generateTempId(): string {
 }
 
 function openNewIssuePanel() {
-  editingIssue.value = null
   editForm.value = { title: '', description: '', priority: 'MEDIUM', type: 'FEATURE' }
   showSlidePanel.value = true
 }
 
-function openEditPanel(issue: Issue) {
-  editingIssue.value = issue
-  editForm.value = { 
-    title: issue.title, 
-    description: issue.description || '', 
-    priority: issue.priority,
-    type: issue.type
-  }
-  showSlidePanel.value = true
-}
-
 async function saveIssue() {
-  if (!editForm.value.title.trim()) return
-  
-  if (editingIssue.value) {
-    await optimistic.optimisticUpdate(
-      async (id, updates) => {
-        return await $fetch<Issue>(`/api/issues/${id}`, {
-          method: 'PATCH',
-          body: updates
-        })
-      },
-      editingIssue.value.id,
-      { 
-        title: editForm.value.title, 
-        description: editForm.value.description,
-        priority: editForm.value.priority,
-        type: editForm.value.type
-      }
-    )
-  } else {
-    const tempItem: Issue = {
-      id: generateTempId(),
-      title: editForm.value.title,
-      description: editForm.value.description,
-      status: 'TODO',
-      priority: editForm.value.priority,
-      type: editForm.value.type,
-      order: 0,
-      projectId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    
-    await optimistic.optimisticAdd(
+  if (!editForm.value.title.trim() || isSaving.value) return
+
+  isSaving.value = true
+  const tempItem: Issue = {
+    id: generateTempId(),
+    title: editForm.value.title,
+    description: editForm.value.description,
+    status: 'TODO',
+    priority: editForm.value.priority,
+    type: editForm.value.type,
+    order: 0,
+    projectId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+
+  try {
+    const createdIssue = await optimistic.optimisticAdd(
       async (item) => {
         return await $fetch<Issue>('/api/issues', {
           method: 'POST',
-          body: { 
-            title: item.title, 
-            description: item.description, 
+          body: {
+            title: item.title,
+            description: item.description,
             status: item.status,
             priority: item.priority,
             type: item.type,
@@ -154,19 +133,16 @@ async function saveIssue() {
       },
       tempItem
     )
-  }
-  
-  showSlidePanel.value = false
-}
 
-async function deleteIssue(id: string) {
-  await optimistic.optimisticDelete(
-    async (itemId) => {
-      await $fetch(`/api/issues/${itemId}`, { method: 'DELETE' })
-    },
-    id
-  )
-  showSlidePanel.value = false
+    showSlidePanel.value = false
+
+    // Navigate to issue detail page
+    if (createdIssue?.id) {
+      navigateTo(`/issues/${createdIssue.id}`)
+    }
+  } finally {
+    isSaving.value = false
+  }
 }
 
 function onDragStart(issue: Issue) {
@@ -222,16 +198,6 @@ async function aiExpand(issue: Issue) {
   isExpanding.value = true
   expandingIssueId.value = issue.id
   
-  // Open the slide panel to show streaming output
-  editingIssue.value = issue
-  editForm.value = { 
-    title: issue.title, 
-    description: '', 
-    priority: issue.priority,
-    type: issue.type
-  }
-  showSlidePanel.value = true
-  
   try {
     const aiSettings = getAISettings()
     const response = await fetch('/api/ai/expand', {
@@ -250,11 +216,8 @@ async function aiExpand(issue: Issue) {
       const { done, value } = await reader.read()
       if (done) break
       result += new TextDecoder().decode(value)
-      // Real-time streaming: update description as chunks arrive
-      editForm.value.description = result
     }
     
-    // Persist the final result to the server
     await optimistic.optimisticUpdate(
       async (id, updates) => {
         return await $fetch<Issue>(`/api/issues/${id}`, {
@@ -341,13 +304,13 @@ onMounted(async () => {
           </div>
 
           <div class="flex-1 p-4 space-y-4 overflow-y-auto">
-            <div
+            <NuxtLink
               v-for="issue in issuesByStatus[col.status] || []"
               :key="issue.id"
+              :to="`/issues/${issue.id}`"
               draggable="true"
               @dragstart="onDragStart(issue)"
-              @click="openEditPanel(issue)"
-              class="group relative bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all hover:border-border/80 cursor-pointer"
+              class="group relative bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all hover:border-border/80 cursor-pointer block"
               :class="{ 'opacity-50': optimistic.isPending(issue.id) }"
             >
               <div class="flex items-start justify-between mb-2">
@@ -360,20 +323,25 @@ onMounted(async () => {
               </div>
 
               <div class="flex items-center gap-2 flex-wrap">
+                <component
+                  :is="statusConfig[issue.status]?.icon"
+                  :class="statusConfig[issue.status]?.color"
+                  class="w-3.5 h-3.5"
+                />
                 <span :class="typeConfig[issue.type]?.color" class="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
                   <component :is="typeConfig[issue.type]?.icon" class="w-3 h-3" />
                   {{ typeConfig[issue.type]?.label }}
                 </span>
-                <component 
-                  :is="priorityConfig[issue.priority]?.icon" 
-                  :class="priorityConfig[issue.priority]?.color" 
-                  class="w-3 h-3" 
+                <component
+                  :is="priorityConfig[issue.priority]?.icon"
+                  :class="priorityConfig[issue.priority]?.color"
+                  class="w-3 h-3"
                 />
               </div>
 
               <div class="flex items-center gap-2 mt-3">
                 <button
-                  @click.stop="aiExpand(issue)"
+                  @click.prevent.stop="aiExpand(issue)"
                   :disabled="isExpanding"
                   class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5 text-[10px] font-bold text-primary hover:bg-primary/10 transition-all border border-primary/20"
                 >
@@ -381,7 +349,7 @@ onMounted(async () => {
                   AI EXPAND
                 </button>
               </div>
-            </div>
+            </NuxtLink>
             
             <div v-if="(issuesByStatus[col.status]?.length || 0) === 0" class="border-2 border-dashed border-border/30 rounded-xl h-24 flex items-center justify-center text-xs text-muted-foreground/50">
               Drop issues here
@@ -391,7 +359,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Slide-over Panel -->
+    <!-- Slide-over Panel for New Issue -->
     <Teleport to="body">
       <Transition name="slide">
         <div v-if="showSlidePanel" class="fixed inset-0 z-50">
@@ -399,7 +367,7 @@ onMounted(async () => {
           <div class="absolute right-0 top-0 h-full w-full max-w-md bg-card border-l border-border shadow-xl">
             <div class="flex flex-col h-full">
               <div class="p-6 border-b border-border flex items-center justify-between">
-                <h2 class="text-lg font-semibold">{{ editingIssue ? 'Edit Issue' : 'New Issue' }}</h2>
+                <h2 class="text-lg font-semibold">New Issue</h2>
                 <button @click="showSlidePanel = false" class="p-2 hover:bg-muted rounded-lg">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -419,28 +387,12 @@ onMounted(async () => {
                 </div>
                 
                 <div>
-                  <div class="flex items-center justify-between mb-2">
-                    <label class="block text-sm font-medium">Description</label>
-                    <button
-                      v-if="editingIssue && !isExpanding"
-                      @click="aiExpand(editingIssue)"
-                      class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5 text-[10px] font-bold text-primary hover:bg-primary/10 transition-all border border-primary/20"
-                    >
-                      <Sparkles class="w-3 h-3" />
-                      AI EXPAND
-                    </button>
-                    <span v-if="isExpanding" class="flex items-center gap-1.5 text-[10px] text-primary animate-pulse">
-                      <Sparkles class="w-3 h-3" />
-                      Generating...
-                    </span>
-                  </div>
+                  <label class="block text-sm font-medium mb-2">Description</label>
                   <textarea
                     v-model="editForm.description"
                     rows="10"
                     placeholder="Issue description (Markdown supported)..."
                     class="w-full bg-secondary/50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-ring transition-all resize-none font-mono text-sm"
-                    :class="{ 'border-primary/30 ring-1 ring-primary/20': isExpanding }"
-                    :readonly="isExpanding"
                   ></textarea>
                 </div>
 
@@ -472,21 +424,13 @@ onMounted(async () => {
                 </div>
               </div>
               
-              <div class="p-6 border-t border-border flex items-center justify-between">
-                <button
-                  v-if="editingIssue"
-                  @click="deleteIssue(editingIssue.id)"
-                  class="px-4 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-all"
-                >
-                  Delete
-                </button>
-                <div v-else></div>
+              <div class="p-6 border-t border-border flex items-center justify-end">
                 <button
                   @click="saveIssue"
-                  :disabled="!editForm.title.trim()"
+                  :disabled="!editForm.title.trim() || isSaving"
                   class="px-6 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 transition-all disabled:opacity-50"
                 >
-                  {{ editingIssue ? 'Save Changes' : 'Create Issue' }}
+                  {{ isSaving ? 'Creating...' : 'Create Issue' }}
                 </button>
               </div>
             </div>
