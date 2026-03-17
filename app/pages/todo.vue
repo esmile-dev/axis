@@ -2,7 +2,6 @@
 import { Trash2, CheckCircle2, Circle, Cloud, CloudOff } from 'lucide-vue-next'
 import { useMagicKeys } from '@vueuse/core'
 import IssueCreator from '@/components/IssueCreator.vue'
-import IssueDetail from '@/components/IssueDetail.vue'
 
 const localFirst = useLocalFirst('issues-todo', async () => {
     return await $fetch('/api/issues', { query: { projectId: 'none' } });
@@ -10,8 +9,6 @@ const localFirst = useLocalFirst('issues-todo', async () => {
 const optimistic = useOptimistic(localFirst)
 
 const isCreatorOpen = ref(false)
-const isDetailOpen = ref(false)
-const selectedIssueId = ref<string | null>(null)
 
 const { c } = useMagicKeys()
 
@@ -122,13 +119,13 @@ onMounted(() => localFirst.init())
             <Circle v-else class="w-5 h-5" />
           </button>
           
-          <button
+          <NuxtLink
+            :to="`/issues/${issue.id}`"
             class="flex-1 text-sm transition-all text-left truncate"
             :class="{ 'line-through text-muted-foreground': issue.status === 'DONE' }"
-            @click="selectedIssueId = issue.id; isDetailOpen = true"
           >
             {{ issue.title }}
-          </button>
+          </NuxtLink>
 
           <button
             @click.stop="deleteTodo(issue.id)"
@@ -146,8 +143,6 @@ onMounted(() => localFirst.init())
         <p class="text-sm mt-2 opacity-50">Press <kbd class="px-2 py-0.5 bg-secondary/50 rounded-md border border-border">C</kbd> to create a new task</p>
       </div>
     </div>
-
-    <IssueDetail v-model:open="isDetailOpen" :issue-id="selectedIssueId" />
   </div>
 </template>
 
