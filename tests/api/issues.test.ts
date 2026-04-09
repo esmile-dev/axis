@@ -1,13 +1,25 @@
 /**
  * API 测试 - Issues CRUD
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 
 const BASE_URL = 'http://localhost:3000'
 
 describe('Issues API', () => {
   beforeEach(async () => {
     // 清理测试数据
+    const res = await fetch(`${BASE_URL}/api/issues`)
+    const issues = await res.json()
+
+    for (const issue of issues) {
+      if (issue.title.startsWith('[TEST]')) {
+        await fetch(`${BASE_URL}/api/issues/${issue.id}`, { method: 'DELETE' })
+      }
+    }
+  })
+
+  // 所有测试结束后再次清理
+  afterAll(async () => {
     const res = await fetch(`${BASE_URL}/api/issues`)
     const issues = await res.json()
 

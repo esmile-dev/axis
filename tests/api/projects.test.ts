@@ -1,13 +1,25 @@
 /**
  * API 测试 - Projects CRUD
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 
 const BASE_URL = 'http://localhost:3000'
 
 describe('Projects API', () => {
   beforeEach(async () => {
     // 清理测试数据
+    const res = await fetch(`${BASE_URL}/api/projects`)
+    const projects = await res.json()
+
+    for (const project of projects) {
+      if (project.name.startsWith('[TEST]')) {
+        await fetch(`${BASE_URL}/api/projects/${project.id}`, { method: 'DELETE' })
+      }
+    }
+  })
+
+  // 所有测试结束后再次清理
+  afterAll(async () => {
     const res = await fetch(`${BASE_URL}/api/projects`)
     const projects = await res.json()
 

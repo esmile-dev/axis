@@ -22,6 +22,18 @@ describe('Inbox API', () => {
     }
   })
 
+  // 所有测试结束后再次清理
+  afterAll(async () => {
+    const res = await fetch(`${BASE_URL}/api/inbox`)
+    const items = await res.json()
+
+    for (const item of items) {
+      if (item.content.startsWith('[TEST]')) {
+        await fetch(`${BASE_URL}/api/inbox/${item.id}`, { method: 'DELETE' })
+      }
+    }
+  })
+
   describe('创建 InboxItem', () => {
     it('应该创建新的 InboxItem', async () => {
       const res = await fetch(`${BASE_URL}/api/inbox`, {
