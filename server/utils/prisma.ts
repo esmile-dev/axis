@@ -4,7 +4,11 @@ import { PrismaPg } from '@prisma/adapter-pg'
 
 const prismaClientSingleton = () => {
   const connectionString = process.env.DATABASE_URL!
-  const pool = new Pool({ connectionString })
+  const pool = new Pool({
+    connectionString,
+    // 设置默认 schema
+    options: '-c search_path=axis'
+  })
   const adapter = new PrismaPg(pool)
   return new PrismaClient({ adapter })
 }
