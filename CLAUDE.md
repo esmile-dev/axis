@@ -139,3 +139,9 @@ prisma/schema.prisma     # 数据模型定义
 **准则生效的标志：** diff 中无不必要的变更，过度复杂导致的重写减少，实现前有澄清问题而非出错后补救。
 
 Source: [Andrej Karpathy Skills](https://github.com/multica-ai/andrej-karpathy-skills)
+
+## Pre-Commit
+
+**提交前必须测试。** 未验证 = 未完成。
+
+Nitro 动态路由：`[param]/index.get.ts` ✓，`[param].get.ts` ✗（被 Vue Router 拦截）
