@@ -8,5 +8,10 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     databaseUrl: process.env.DATABASE_URL
+  },
+  nitro: {
+    routeRules: {
+      '/api/uploads/**': { cors: true }
+    }
   }
 })

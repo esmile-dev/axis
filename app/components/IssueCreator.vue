@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { useImageUpload } from '@/composables/useImageUpload'
 
 const props = defineProps<{
   projectId?: string
@@ -31,6 +32,10 @@ const issueType = ref('FEATURE')
 const projectId = ref(null as string | null)
 
 const emit = defineEmits(['create'])
+
+// Image upload
+const { isUploading, uploadImage, insertImageMarkdown } = useImageUpload()
+const fileInput = ref<HTMLInputElement | null>(null)
 
 // 初始化时如果传入了 projectId prop，使用它
 onMounted(() => {
@@ -88,6 +93,25 @@ function handleCreate() {
   issueType.value = 'FEATURE'
   projectId.value = null
   isOpen.value = false
+}
+
+function triggerFileUpload() {
+  fileInput.value?.click()
+}
+
+async function handleFileUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+
+  if (!file) return
+
+  const imageUrl = await uploadImage(file)
+  if (imageUrl) {
+    description.value = insertImageMarkdown(description.value, imageUrl)
+  }
+
+  // Reset input
+  input.value = ''
 }
 </script>
 
@@ -228,8 +252,22 @@ function handleCreate() {
       </div>
 
       <div class="px-5 py-3 bg-[#18181a] border-t border-border/40 flex items-center justify-between">
-        <Button variant="ghost" size="icon" class="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-secondary/40">
-          <Paperclip class="h-4 w-4" />
+        <input
+          ref="fileInput"
+          type="file"
+          accept="image/*"
+          class="hidden"
+          @change="handleFileUpload"
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          class="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-secondary/40"
+          :disabled="isUploading"
+          @click="triggerFileUpload"
+        >
+          <Paperclip class="h-4 w-4" v-if="!isUploading" />
+          <div class="w-4 h-4 border-2 border-muted-foreground border-t-transparent animate-spin rounded-full" v-else />
         </Button>
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2 text-xs text-muted-foreground">

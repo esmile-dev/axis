@@ -8,6 +8,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { useImageUpload } from '@/composables/useImageUpload'
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +20,10 @@ const comments = ref<any[]>([])
 const newComment = ref('')
 const isSaving = ref(false)
 const isLoading = ref(true)
+
+// Image upload
+const { isUploading, uploadImage, insertImageMarkdown } = useImageUpload()
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const statusOptions = [
   { value: 'BACKLOG', label: 'Backlog', color: 'text-muted-foreground' },
@@ -119,9 +125,28 @@ async function addComment() {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleString(undefined, { 
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+  return new Date(dateStr).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   })
+}
+
+function triggerFileUpload() {
+  fileInput.value?.click()
+}
+
+async function handleFileUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+
+  if (!file) return
+
+  const imageUrl = await uploadImage(file)
+  if (imageUrl) {
+    newComment.value = insertImageMarkdown(newComment.value, imageUrl)
+  }
+
+  // Reset input
+  input.value = ''
 }
 
 function goBack() {
@@ -170,6 +195,9 @@ function goBack() {
             placeholder="Add description..."
             class="w-full bg-transparent border-none text-sm resize-none min-h-[120px] focus:ring-0 focus:outline-none p-0 placeholder:text-muted-foreground/60"
           ></textarea>
+          <div v-if="issue.description" class="pt-2 text-sm">
+            <MarkdownRenderer :content="issue.description" />
+          </div>
         </div>
 
         <div class="flex flex-wrap items-center gap-2 pt-4 border-t border-border/20">
@@ -282,8 +310,22 @@ function goBack() {
                 @keydown.enter.prevent="addComment"
               ></textarea>
               <div class="flex items-center justify-between mt-2 pt-2 border-t border-border/20">
-                <Button variant="ghost" size="icon" class="h-7 w-7 text-muted-foreground hover:text-foreground">
-                  <Paperclip class="w-4 h-4" />
+                <input
+                  ref="fileInput"
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  @change="handleFileUpload"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  :disabled="isUploading"
+                  @click="triggerFileUpload"
+                >
+                  <Paperclip class="w-4 h-4" v-if="!isUploading" />
+                  <div class="w-4 h-4 border-2 border-muted-foreground border-t-transparent animate-spin rounded-full" v-else />
                 </Button>
                 <Button 
                   size="sm" 
@@ -306,8 +348,8 @@ function goBack() {
                     <span class="text-sm font-medium">You</span>
                     <span class="text-xs text-muted-foreground">{{ formatDate(comment.createdAt) }}</span>
                   </div>
-                  <div class="text-sm text-foreground/90 whitespace-pre-wrap">
-                    {{ comment.content }}
+                  <div class="text-sm text-foreground/90">
+                    <MarkdownRenderer :content="comment.content" />
                   </div>
                 </div>
               </div>
