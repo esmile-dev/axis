@@ -22,8 +22,18 @@ const isSaving = ref(false)
 const isLoading = ref(true)
 
 // Image upload
-const { isUploading, uploadImage, insertImageMarkdown } = useImageUpload()
+const { isUploading, uploadImage, insertImageMarkdown, handlePaste } = useImageUpload()
 const fileInput = ref<HTMLInputElement | null>(null)
+
+async function onDescriptionPaste(event: ClipboardEvent) {
+  if (issue.value) {
+    issue.value.description = await handlePaste(event, issue.value.description || '')
+  }
+}
+
+async function onCommentPaste(event: ClipboardEvent) {
+  newComment.value = await handlePaste(event, newComment.value)
+}
 
 const statusOptions = [
   { value: 'BACKLOG', label: 'Backlog', color: 'text-muted-foreground' },
@@ -192,6 +202,7 @@ function goBack() {
           <textarea
             v-model="issue.description"
             @input="queueSave"
+            @paste="onDescriptionPaste"
             placeholder="Add description..."
             class="w-full bg-transparent border-none text-sm resize-none min-h-[120px] focus:ring-0 focus:outline-none p-0 placeholder:text-muted-foreground/60"
           ></textarea>
@@ -308,6 +319,7 @@ function goBack() {
                 placeholder="Leave a comment..."
                 class="w-full bg-transparent border-none text-sm resize-none focus:ring-0 focus:outline-none p-0 placeholder:text-muted-foreground/60 min-h-[60px]"
                 @keydown.enter.prevent="addComment"
+                @paste="onCommentPaste"
               ></textarea>
               <div class="flex items-center justify-between mt-2 pt-2 border-t border-border/20">
                 <input

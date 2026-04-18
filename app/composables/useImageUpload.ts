@@ -32,10 +32,33 @@ export function useImageUpload() {
     return text + imageMarkdown
   }
 
+  async function handlePaste(event: ClipboardEvent, currentText: string): Promise<string> {
+    const items = event.clipboardData?.items
+    if (!items) return currentText
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile()
+        if (file) {
+          // 阻止默认粘贴行为（避免粘贴图片文件名）
+          event.preventDefault()
+
+          const imageUrl = await uploadImage(file)
+          if (imageUrl) {
+            return insertImageMarkdown(currentText, imageUrl)
+          }
+        }
+      }
+    }
+
+    return currentText
+  }
+
   return {
     isUploading,
     uploadError,
     uploadImage,
-    insertImageMarkdown
+    insertImageMarkdown,
+    handlePaste
   }
 }

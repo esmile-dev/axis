@@ -34,8 +34,12 @@ const projectId = ref(null as string | null)
 const emit = defineEmits(['create'])
 
 // Image upload
-const { isUploading, uploadImage, insertImageMarkdown } = useImageUpload()
+const { isUploading, uploadImage, insertImageMarkdown, handlePaste } = useImageUpload()
 const fileInput = ref<HTMLInputElement | null>(null)
+
+async function onPaste(event: ClipboardEvent) {
+  description.value = await handlePaste(event, description.value)
+}
 
 // 初始化时如果传入了 projectId prop，使用它
 onMounted(() => {
@@ -148,6 +152,7 @@ async function handleFileUpload(event: Event) {
           v-model="description"
           placeholder="Add description..."
           class="w-full bg-transparent border-none text-sm resize-none min-h-[100px] focus:ring-0 focus:outline-none p-0 placeholder:text-muted-foreground/60"
+          @paste="onPaste"
         ></textarea>
       </div>
 
