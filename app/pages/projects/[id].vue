@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Plus, GripVertical, Sparkles, Cloud, CloudOff, ArrowLeft, Bug, Lightbulb, Wrench, AlertCircle, Circle, CircleDot, CircleCheck } from 'lucide-vue-next'
+import IssueCreator from '@/components/IssueCreator.vue'
 
 type IssueStatus = 'TODO' | 'IN_PROGRESS' | 'DONE'
 type IssuePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
@@ -81,68 +82,56 @@ const issuesByStatus = computed(() => {
 const draggedIssue = ref<Issue | null>(null)
 const dragOverColumn = ref<string | null>(null)
 
-const showSlidePanel = ref(false)
-const isSaving = ref(false)
-const editForm = ref({
-  title: '',
-  description: '',
-  priority: 'MEDIUM' as IssuePriority,
-  type: 'FEATURE' as IssueType
-})
+const showIssueCreator = ref(false)
 
 function generateTempId(): string {
   return `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
 function openNewIssuePanel() {
-  editForm.value = { title: '', description: '', priority: 'MEDIUM', type: 'FEATURE' }
-  showSlidePanel.value = true
+  showIssueCreator.value = true
 }
 
-async function saveIssue() {
-  if (!editForm.value.title.trim() || isSaving.value) return
-
-  isSaving.value = true
+async function handleIssueCreate(issueData: {
+  title: string
+  description: string
+  status: string
+  priority: string
+  type: string
+  projectId: string | null
+}) {
   const tempItem: Issue = {
     id: generateTempId(),
-    title: editForm.value.title,
-    description: editForm.value.description,
-    status: 'TODO',
-    priority: editForm.value.priority,
-    type: editForm.value.type,
+    title: issueData.title,
+    description: issueData.description,
+    status: issueData.status as IssueStatus || 'TODO',
+    priority: issueData.priority as IssuePriority,
+    type: issueData.type as IssueType,
     order: 0,
     projectId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }
 
-  try {
-    const createdIssue = await optimistic.optimisticAdd(
-      async (item) => {
-        return await $fetch<Issue>('/api/issues', {
-          method: 'POST',
-          body: {
-            title: item.title,
-            description: item.description,
-            status: item.status,
-            priority: item.priority,
-            type: item.type,
-            projectId
-          }
-        })
-      },
-      tempItem
-    )
+  await optimistic.optimisticAdd(
+    async (item) => {
+      return await $fetch<Issue>('/api/issues', {
+        method: 'POST',
+        body: {
+          title: item.title,
+          description: item.description,
+          status: item.status,
+          priority: item.priority,
+          type: item.type,
+          projectId
+        }
+      })
+    },
+    tempItem
+  )
 
-    showSlidePanel.value = false
-
-    // Navigate to issue detail page
-    if (createdIssue?.id) {
-      navigateTo(`/issues/${createdIssue.id}`)
-    }
-  } finally {
-    isSaving.value = false
-  }
+  // 不跳转，留在看板页面
+  showIssueCreator.value = false
 }
 
 function onDragStart(issue: Issue) {
@@ -272,13 +261,20 @@ onMounted(async () => {
           <CloudOff v-else class="w-4 h-4 animate-pulse" />
           <span>{{ localFirst.isSyncing.value ? 'Syncing...' : 'Synced' }}</span>
         </div>
-        <button
-          @click="openNewIssuePanel"
-          class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
+        <IssueCreator
+          v-model:open="showIssueCreator"
+          :project-id="projectId"
+          @create="handleIssueCreate"
         >
-          <Plus class="w-4 h-4" />
-          New Issue
-        </button>
+          <template #trigger>
+            <button
+              class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
+            >
+              <Plus class="w-4 h-4" />
+              New Issue
+            </button>
+          </template>
+        </IssueCreator>
       </div>
     </header>
 
@@ -358,100 +354,5 @@ onMounted(async () => {
         </div>
       </div>
     </div>
-
-    <!-- Slide-over Panel for New Issue -->
-    <Teleport to="body">
-      <Transition name="slide">
-        <div v-if="showSlidePanel" class="fixed inset-0 z-50">
-          <div class="absolute inset-0 bg-black/50" @click="showSlidePanel = false"></div>
-          <div class="absolute right-0 top-0 h-full w-full max-w-md bg-card border-l border-border shadow-xl">
-            <div class="flex flex-col h-full">
-              <div class="p-6 border-b border-border flex items-center justify-between">
-                <h2 class="text-lg font-semibold">New Issue</h2>
-                <button @click="showSlidePanel = false" class="p-2 hover:bg-muted rounded-lg">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div class="flex-1 p-6 space-y-6 overflow-y-auto">
-                <div>
-                  <label class="block text-sm font-medium mb-2">Title</label>
-                  <input
-                    v-model="editForm.title"
-                    type="text"
-                    placeholder="Issue title..."
-                    class="w-full bg-secondary/50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-ring transition-all"
-                  />
-                </div>
-                
-                <div>
-                  <label class="block text-sm font-medium mb-2">Description</label>
-                  <textarea
-                    v-model="editForm.description"
-                    rows="10"
-                    placeholder="Issue description (Markdown supported)..."
-                    class="w-full bg-secondary/50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-ring transition-all resize-none font-mono text-sm"
-                  ></textarea>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-sm font-medium mb-2">Priority</label>
-                    <select
-                      v-model="editForm.priority"
-                      class="w-full bg-secondary/50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-ring transition-all"
-                    >
-                      <option value="LOW">Low</option>
-                      <option value="MEDIUM">Medium</option>
-                      <option value="HIGH">High</option>
-                      <option value="URGENT">Urgent</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label class="block text-sm font-medium mb-2">Type</label>
-                    <select
-                      v-model="editForm.type"
-                      class="w-full bg-secondary/50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-ring transition-all"
-                    >
-                      <option value="BUG">Bug</option>
-                      <option value="FEATURE">Feature</option>
-                      <option value="IMPROVEMENT">Improvement</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="p-6 border-t border-border flex items-center justify-end">
-                <button
-                  @click="saveIssue"
-                  :disabled="!editForm.title.trim() || isSaving"
-                  class="px-6 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 transition-all disabled:opacity-50"
-                >
-                  {{ isSaving ? 'Creating...' : 'Create Issue' }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
-
-<style scoped>
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s ease;
-}
-.slide-enter-from,
-.slide-leave-to {
-  opacity: 0;
-}
-.slide-enter-from .absolute.right-0,
-.slide-leave-to .absolute.right-0 {
-  transform: translateX(100%);
-}
-</style>

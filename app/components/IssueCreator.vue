@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Plus, Maximize2, X, Paperclip, ChevronDown, Circle, SignalLow, SignalMedium, Signal, AlertTriangle, Bug, Lightbulb, Zap } from 'lucide-vue-next'
 import {
   Dialog,
@@ -17,6 +17,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 
+const props = defineProps<{
+  projectId?: string
+}>()
+
 const isOpen = defineModel('open', { type: Boolean, default: false })
 const title = ref('')
 const description = ref('')
@@ -27,6 +31,13 @@ const issueType = ref('FEATURE')
 const projectId = ref(null as string | null)
 
 const emit = defineEmits(['create'])
+
+// 初始化时如果传入了 projectId prop，使用它
+onMounted(() => {
+  if (props.projectId) {
+    projectId.value = props.projectId
+  }
+})
 
 const statusOptions = [
   { value: 'BACKLOG', label: 'Backlog', color: 'text-muted-foreground' },
