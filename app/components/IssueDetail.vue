@@ -186,7 +186,7 @@ async function deleteIssue() {
           >
             <Trash2 class="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:text-foreground" @click="isOpen = false">
+          <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:text-foreground" :class="{ 'opacity-0': showDeleteConfirm }" @click="isOpen = false">
             <X class="h-4 w-4" />
           </Button>
         </div>
