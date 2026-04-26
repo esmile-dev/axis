@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Plus, Maximize2, X, Paperclip, ChevronDown, Circle, SignalLow, SignalMedium, Signal, AlertTriangle, Bug, Lightbulb, Zap } from 'lucide-vue-next'
 import {
   Dialog,
@@ -41,9 +41,9 @@ async function onPaste(event: ClipboardEvent) {
   description.value = await handlePaste(event, description.value)
 }
 
-// 初始化时如果传入了 projectId prop，使用它
-onMounted(() => {
-  if (props.projectId) {
+// 每次打开对话框时，设置默认 project
+watch(isOpen, (open) => {
+  if (open && props.projectId) {
     projectId.value = props.projectId
   }
 })
