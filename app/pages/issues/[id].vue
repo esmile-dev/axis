@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { X, Send, ChevronDown, Paperclip, MessageSquare, ArrowLeft } from 'lucide-vue-next'
+import { X, Send, Trash2, ChevronDown, Paperclip, MessageSquare, ArrowLeft } from 'lucide-vue-next'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useImageUpload } from '@/composables/useImageUpload'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
@@ -20,6 +28,8 @@ const comments = ref<any[]>([])
 const newComment = ref('')
 const isSaving = ref(false)
 const isLoading = ref(true)
+const isDeleting = ref(false)
+const showDeleteConfirm = ref(false)
 
 // Image upload
 const { isUploading, uploadImage, insertImageMarkdown, handlePaste } = useImageUpload()
@@ -162,6 +172,20 @@ async function handleFileUpload(event: Event) {
 function goBack() {
   router.back()
 }
+
+async function deleteIssue() {
+  if (!issueId.value || isDeleting.value) return
+  isDeleting.value = true
+  try {
+    await $fetch(`/api/issues/${issueId.value}`, { method: 'DELETE' })
+    showDeleteConfirm.value = false
+    router.push('/')
+  } catch (err) {
+    console.error('Failed to delete issue:', err)
+  } finally {
+    isDeleting.value = false
+  }
+}
 </script>
 
 <template>
@@ -180,9 +204,37 @@ function goBack() {
         </div>
         <div class="flex items-center gap-2">
           <span v-if="isSaving" class="text-xs text-muted-foreground animate-pulse">Saving...</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-8 w-8 text-muted-foreground hover:text-red-400"
+            @click="showDeleteConfirm = true"
+          >
+            <Trash2 class="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </header>
+
+    <!-- Delete Confirmation Dialog -->
+    <Dialog v-model:open="showDeleteConfirm">
+      <DialogContent class="bg-[#1c1c1e] border-border text-foreground max-w-sm">
+        <DialogHeader>
+          <DialogTitle class="text-base">Delete issue?</DialogTitle>
+          <DialogDescription class="text-sm text-muted-foreground">
+            This action cannot be undone. The issue will be permanently removed.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter class="flex gap-2 justify-end">
+          <Button variant="outline" size="sm" class="h-7" @click="showDeleteConfirm = false">
+            Cancel
+          </Button>
+          <Button size="sm" class="h-7 bg-red-600 hover:bg-red-700 text-white" :disabled="isDeleting" @click="deleteIssue">
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <main class="max-w-4xl mx-auto px-6 py-8">
       <div v-if="isLoading" class="flex flex-col items-center justify-center py-20 text-muted-foreground">

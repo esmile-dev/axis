@@ -8,6 +8,14 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -19,12 +27,16 @@ const props = defineProps<{
   issueId: string | null
 }>()
 
+const emit = defineEmits(['deleted'])
+
 const isOpen = defineModel('open', { type: Boolean, default: false })
 
 const issue = ref<any>(null)
 const comments = ref<any[]>([])
 const newComment = ref('')
 const isSaving = ref(false)
+const isDeleting = ref(false)
+const showDeleteConfirm = ref(false)
 
 // Selectors data (reusing from IssueCreator)
 const statusOptions = [
@@ -134,9 +146,24 @@ async function addComment() {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleString(undefined, { 
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+  return new Date(dateStr).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   })
+}
+
+async function deleteIssue() {
+  if (!props.issueId || isDeleting.value) return
+  isDeleting.value = true
+  try {
+    await $fetch(`/api/issues/${props.issueId}`, { method: 'DELETE' })
+    showDeleteConfirm.value = false
+    isOpen.value = false
+    emit('deleted', props.issueId)
+  } catch (err) {
+    console.error('Failed to delete issue:', err)
+  } finally {
+    isDeleting.value = false
+  }
 }
 </script>
 
@@ -151,11 +178,39 @@ function formatDate(dateStr: string) {
         </SheetTitle>
         <div class="flex items-center gap-2">
           <span v-if="isSaving" class="text-xs text-muted-foreground animate-pulse">Saving...</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-6 w-6 text-muted-foreground hover:text-red-400"
+            @click="showDeleteConfirm = true"
+          >
+            <Trash2 class="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:text-foreground" @click="isOpen = false">
             <X class="h-4 w-4" />
           </Button>
         </div>
       </SheetHeader>
+
+      <!-- Delete Confirmation Dialog -->
+      <Dialog v-model:open="showDeleteConfirm">
+        <DialogContent class="bg-[#1c1c1e] border-border text-foreground max-w-sm">
+          <DialogHeader>
+            <DialogTitle class="text-base">Delete issue?</DialogTitle>
+            <DialogDescription class="text-sm text-muted-foreground">
+              This action cannot be undone. The issue will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter class="flex gap-2 justify-end">
+            <Button variant="outline" size="sm" class="h-7" @click="showDeleteConfirm = false">
+              Cancel
+            </Button>
+            <Button size="sm" class="h-7 bg-red-600 hover:bg-red-700 text-white" :disabled="isDeleting" @click="deleteIssue">
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div class="flex-1 overflow-y-auto" v-if="issue">
         <div class="px-6 py-6 space-y-6">

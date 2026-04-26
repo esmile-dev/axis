@@ -62,16 +62,6 @@ prisma/schema.prisma     # 数据模型定义
 
 核心实体关系：`Project` 1:N `Issue` 1:N `Comment`。Issue 使用枚举定义 `IssueStatus`/`IssuePriority`/`IssueType`。
 
-## Development Philosophy (from PRD)
-
-方法论四阶段：
-1. **诊断期**: 从真实痛点收集需求
-2. **收敛期**: DDD 划定边界，确定技术栈
-3. **设计期**: JTBD 框架 - `当 [场景] 时，我想要 [行动]，以便于 [效果]`
-4. **破冰期**: Vibe Coding - 分步喂上下文，小步快跑验收
-
-详见 `docs/方法论与产品idea.md`
-
 ## Coding Guidelines (from Karpathy's Approach)
 
 行为准则，减少常见 LLM 编码错误。与项目指令合并使用。
@@ -145,3 +135,13 @@ Source: [Andrej Karpathy Skills](https://github.com/multica-ai/andrej-karpathy-s
 **提交前必须测试。** 未验证 = 未完成。
 
 Nitro 动态路由：`[param]/index.get.ts` ✓，`[param].get.ts` ✗（被 Vue Router 拦截）
+
+## Design & Interaction Reference
+
+参考 **Linear.app** 的设计与交互风格：
+
+- **极简高效**：界面干净，信息密度高，无冗余装饰
+- **键盘优先**：快捷键操作流畅，⌘K 命令面板可触达所有功能
+- **暗色主题**：默认深色背景，配色克制，强调对比度而非色彩
+- **流畅动画**：状态切换有微妙过渡，拖拽排序自然顺滑
+- **即时反馈**：操作立即响应，加载状态用骨架屏而非 spinner
