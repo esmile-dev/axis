@@ -7,11 +7,8 @@ export default defineNuxtConfig({
     port: 7788
   },
   runtimeConfig: {
-    databaseUrl: process.env.DATABASE_URL
-  },
-  nitro: {
-    routeRules: {
-      '/api/uploads/**': { cors: true }
+    public: {
+      apiBase: process.env.AXIS_API_BASE || 'http://localhost:8080'
     }
   },
   components: {

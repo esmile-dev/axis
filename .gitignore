@@ -9,6 +9,10 @@ dist
 # Node dependencies
 node_modules
 
+# Java / Maven (Spring Boot)
+axis-backend/target/
+*.class
+
 # Logs
 logs
 *.log
@@ -22,5 +26,3 @@ logs
 .env
 .env.*
 !.env.example
-
-/app/generated/prisma
