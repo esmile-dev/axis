@@ -74,7 +74,8 @@ const currentStatus = computed(() => statusOptions.find(o => o.value === status.
 const currentPriority = computed(() => priorityOptions.find(o => o.value === priority.value))
 const currentType = computed(() => typeOptions.find(o => o.value === issueType.value))
 
-const { data: projects } = useAsyncData('projects', () => $fetch('/api/projects'))
+const api = useApi()
+const { data: projects } = useAsyncData('projects', () => api('/api/projects'))
 const currentProject = computed(() => projects.value?.find((p: any) => p.id === projectId.value))
 
 function handleCreate() {

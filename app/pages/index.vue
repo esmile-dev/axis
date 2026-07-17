@@ -21,7 +21,8 @@ interface InboxItem {
   updatedAt: string
 }
 
-const localFirst = useLocalFirst<InboxItem>('inbox', () => $fetch<InboxItem[]>('/api/inbox'))
+const api = useApi()
+const localFirst = useLocalFirst<InboxItem>('inbox', () => api<InboxItem[]>('/api/inbox'))
 const optimistic = useOptimistic(localFirst)
 
 // Filter states
@@ -73,7 +74,7 @@ async function fetchItems() {
   if (debouncedSearch.value) params.set('search', debouncedSearch.value)
 
   const query = params.toString()
-  return await $fetch<InboxItem[]>(`/api/inbox${query ? `?${query}` : ''}`)
+  return await api<InboxItem[]>(`/api/inbox${query ? `?${query}` : ''}`)
 }
 
 // Watch server-side filters and refetch
@@ -114,7 +115,7 @@ async function addItem() {
 
   await optimistic.optimisticAdd(
     async (item) => {
-      return await $fetch<InboxItem>('/api/inbox', {
+      return await api<InboxItem>('/api/inbox', {
         method: 'POST',
         body: { content: item.content }
       })
@@ -129,7 +130,7 @@ async function deleteItem(id: string) {
   }
   await optimistic.optimisticDelete(
     async (itemId) => {
-      await $fetch(`/api/inbox/${itemId}`, { method: 'DELETE' })
+      await api(`/api/inbox/${itemId}`, { method: 'DELETE' })
     },
     id
   )
@@ -144,7 +145,7 @@ async function updateItem(id: string, data: { content?: string; status?: string 
   Object.assign(item, data)
 
   try {
-    await $fetch(`/api/inbox/${id}`, {
+    await api(`/api/inbox/${id}`, {
       method: 'PATCH',
       body: data
     })
@@ -175,12 +176,19 @@ async function handleConvertToIssue(data: { title: string; description: string; 
   if (!selectedItemId.value) return
 
   try {
-    const result = await $fetch(`/api/inbox/${selectedItemId.value}/convert`, {
+    await api('/api/issues', {
       method: 'POST',
-      body: data
+      body: {
+        title: data.title,
+        description: data.description,
+        priority: data.priority,
+        type: data.type,
+        projectId: data.projectId
+      }
     })
 
     if (data.deleteOriginal) {
+      await api(`/api/inbox/${selectedItemId.value}`, { method: 'DELETE' })
       await refreshWithFilters()
       selectedItemId.value = null
     }
@@ -195,12 +203,16 @@ async function handleConvertToProject(data: { name: string; description: string;
   if (!selectedItemId.value) return
 
   try {
-    const result = await $fetch(`/api/inbox/${selectedItemId.value}/convert-project`, {
+    await api('/api/projects', {
       method: 'POST',
-      body: data
+      body: {
+        name: data.name,
+        description: data.description
+      }
     })
 
     if (data.deleteOriginal) {
+      await api(`/api/inbox/${selectedItemId.value}`, { method: 'DELETE' })
       await refreshWithFilters()
       selectedItemId.value = null
     }

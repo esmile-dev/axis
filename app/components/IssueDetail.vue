@@ -61,7 +61,8 @@ const typeOptions = [
   { value: 'IMPROVEMENT', label: 'Improvement', emoji: '🔧' },
 ]
 
-const { data: projects } = useAsyncData('projects', () => $fetch('/api/projects'))
+const api = useApi()
+const { data: projects } = useAsyncData('projects', () => api('/api/projects'))
 
 const currentStatus = computed(() => statusOptions.find(o => o.value === issue.value?.status))
 const currentPriority = computed(() => priorityOptions.find(o => o.value === issue.value?.priority))
@@ -85,7 +86,7 @@ watch(isOpen, async (open) => {
 
 async function loadIssue(id: string) {
   try {
-    const data = await $fetch(`/api/issues/${id}`)
+    const data = await api(`/api/issues/${id}`)
     issue.value = data
     comments.value = data.comments || []
   } catch (err) {
@@ -105,7 +106,7 @@ async function saveIssue() {
   if (!issue.value || !props.issueId) return
   isSaving.value = true
   try {
-    await $fetch(`/api/issues/${props.issueId}`, {
+    await api(`/api/issues/${props.issueId}`, {
       method: 'PATCH',
       body: {
         title: issue.value.title,
@@ -134,7 +135,7 @@ async function addComment() {
   if (!newComment.value.trim() || !props.issueId) return
   
   try {
-    const comment = await $fetch(`/api/issues/${props.issueId}/comments`, {
+    const comment = await api(`/api/issues/${props.issueId}/comments`, {
       method: 'POST',
       body: { content: newComment.value }
     })
@@ -155,7 +156,7 @@ async function deleteIssue() {
   if (!props.issueId || isDeleting.value) return
   isDeleting.value = true
   try {
-    await $fetch(`/api/issues/${props.issueId}`, { method: 'DELETE' })
+    await api(`/api/issues/${props.issueId}`, { method: 'DELETE' })
     showDeleteConfirm.value = false
     isOpen.value = false
     emit('deleted', props.issueId)

@@ -9,7 +9,8 @@ interface KnowledgeDoc {
   updatedAt: string
 }
 
-const localFirst = useLocalFirst<KnowledgeDoc>('knowledge', () => $fetch<KnowledgeDoc[]>('/api/knowledge'))
+const api = useApi()
+const localFirst = useLocalFirst<KnowledgeDoc>('knowledge', () => api<KnowledgeDoc[]>('/api/knowledge'))
 const optimistic = useOptimistic(localFirst)
 
 const search = ref('')
@@ -49,7 +50,7 @@ async function saveDoc() {
   if (editingDoc.value) {
     await optimistic.optimisticUpdate(
       async (id, updates) => {
-        return await $fetch<KnowledgeDoc>(`/api/knowledge/${id}`, {
+        return await api<KnowledgeDoc>(`/api/knowledge/${id}`, {
           method: 'PATCH',
           body: updates
         })
@@ -68,7 +69,7 @@ async function saveDoc() {
     
     await optimistic.optimisticAdd(
       async (item) => {
-        return await $fetch<KnowledgeDoc>('/api/knowledge', {
+        return await api<KnowledgeDoc>('/api/knowledge', {
           method: 'POST',
           body: { title: item.title, content: item.content }
         })
@@ -83,7 +84,7 @@ async function saveDoc() {
 async function deleteDoc(id: string) {
   await optimistic.optimisticDelete(
     async (itemId) => {
-      await $fetch(`/api/knowledge/${itemId}`, { method: 'DELETE' })
+      await api(`/api/knowledge/${itemId}`, { method: 'DELETE' })
     },
     id
   )

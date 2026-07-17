@@ -15,6 +15,7 @@ const navItems = [
 
 const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
 const route = useRoute()
+const api = useApi()
 
 // Dynamic project list for sidebar
 const projects = ref<Project[]>([])
@@ -22,7 +23,7 @@ const projectsExpanded = ref(true)
 
 async function loadProjects() {
   try {
-    projects.value = await $fetch<Project[]>('/api/projects')
+    projects.value = await api<Project[]>('/api/projects')
   } catch (e) {
     console.error('Failed to load projects for sidebar:', e)
   }
@@ -36,7 +37,7 @@ watch(() => route.path, () => {
 })
 
 async function handleCapture(content: string) {
-  await $fetch('/api/inbox', {
+  await api('/api/inbox', {
     method: 'POST',
     body: { content }
   })

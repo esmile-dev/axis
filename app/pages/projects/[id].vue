@@ -34,8 +34,9 @@ const route = useRoute()
 const projectId = route.params.id as string
 
 const project = ref<Project | null>(null)
-const localFirst = useLocalFirst<Issue>(`issues_${projectId}`, () => 
-  $fetch<Issue[]>('/api/issues', { query: { projectId } })
+const api = useApi()
+const localFirst = useLocalFirst<Issue>(`issues_${projectId}`, () =>
+  api<Issue[]>('/api/issues', { query: { projectId } })
 )
 const optimistic = useOptimistic(localFirst)
 
@@ -115,7 +116,7 @@ async function handleIssueCreate(issueData: {
 
   await optimistic.optimisticAdd(
     async (item) => {
-      return await $fetch<Issue>('/api/issues', {
+      return await api<Issue>('/api/issues', {
         method: 'POST',
         body: {
           title: item.title,
@@ -156,7 +157,7 @@ async function onDrop(status: string) {
   
   await optimistic.optimisticUpdate(
     async (id, updates) => {
-      return await $fetch<Issue>(`/api/issues/${id}`, {
+      return await api<Issue>(`/api/issues/${id}`, {
         method: 'PATCH',
         body: updates
       })
@@ -172,44 +173,37 @@ async function onDrop(status: string) {
 const isExpanding = ref(false)
 const expandingIssueId = ref<string | null>(null)
 
-function getAISettings() {
-  if (import.meta.client) {
-    return {
-      apiKey: localStorage.getItem('axis_ai_api_key') || '',
-      endpoint: localStorage.getItem('axis_ai_endpoint') || 'https://api.openai.com/v1',
-      model: localStorage.getItem('axis_ai_model') || 'gpt-4o-mini'
-    }
-  }
-  return { apiKey: '', endpoint: 'https://api.openai.com/v1', model: 'gpt-4o-mini' }
-}
-
 async function aiExpand(issue: Issue) {
   isExpanding.value = true
   expandingIssueId.value = issue.id
-  
+
   try {
-    const aiSettings = getAISettings()
-    const response = await fetch('/api/ai/expand', {
+    const { public: { apiBase } } = useRuntimeConfig()
+    const response = await fetch(`${apiBase}/api/agent/expand`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: issue.title,
-        ...aiSettings
-      })
+      body: JSON.stringify({ title: issue.title })
     })
     const reader = response.body?.getReader()
     if (!reader) return
 
-    let result = ''
+    let raw = ''
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      result += new TextDecoder().decode(value)
+      raw += new TextDecoder().decode(value)
     }
-    
+
+    // /api/agent/expand 返回 SSE（data:<chunk>\n\n），剥离帧还原纯文本
+    const result = raw
+      .split('\n')
+      .filter(l => l.startsWith('data:'))
+      .map(l => l.slice(5))
+      .join('')
+
     await optimistic.optimisticUpdate(
       async (id, updates) => {
-        return await $fetch<Issue>(`/api/issues/${id}`, {
+        return await api<Issue>(`/api/issues/${id}`, {
           method: 'PATCH',
           body: updates
         })
@@ -227,7 +221,7 @@ async function aiExpand(issue: Issue) {
 
 async function loadProject() {
   try {
-    const projects = await $fetch<Project[]>('/api/projects')
+    const projects = await api<Project[]>('/api/projects')
     project.value = projects.find(p => p.id === projectId) || null
   } catch (e) {
     console.error('Failed to load project', e)

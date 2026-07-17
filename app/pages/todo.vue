@@ -3,8 +3,9 @@ import { Trash2, CheckCircle2, Circle, Cloud, CloudOff } from 'lucide-vue-next'
 import { useMagicKeys } from '@vueuse/core'
 import IssueCreator from '@/components/IssueCreator.vue'
 
+const api = useApi()
 const localFirst = useLocalFirst('issues-todo', async () => {
-    return await $fetch('/api/issues', { query: { projectId: 'none' } });
+    return await api('/api/issues', { query: { projectId: 'none' } });
 })
 const optimistic = useOptimistic(localFirst)
 
@@ -38,7 +39,7 @@ async function handleCreateIssue(payload: any) {
   
   await optimistic.optimisticAdd(
     async (item: any) => {
-      return await $fetch('/api/issues', {
+      return await api('/api/issues', {
         method: 'POST',
         body: payload
       })
@@ -55,7 +56,7 @@ async function toggleTodo(issue: any) {
   const newStatus = issue.status === 'DONE' ? 'TODO' : 'DONE'
   await optimistic.optimisticUpdate(
     async (id: string, updates: any) => {
-      return await $fetch(`/api/issues/${id}`, {
+      return await api(`/api/issues/${id}`, {
         method: 'PATCH',
         body: updates
       })
@@ -68,7 +69,7 @@ async function toggleTodo(issue: any) {
 async function deleteTodo(id: string) {
   await optimistic.optimisticDelete(
     async (itemId) => {
-      await $fetch(`/api/issues/${itemId}`, { method: 'DELETE' })
+      await api(`/api/issues/${itemId}`, { method: 'DELETE' })
     },
     id
   )

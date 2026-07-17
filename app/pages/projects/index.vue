@@ -11,10 +11,11 @@ interface Project {
   order: number
   createdAt: string
   updatedAt: string
-  _count?: { issues: number }
+  issueCount?: number
 }
 
-const localFirst = useLocalFirst<Project>('projects', () => $fetch<Project[]>('/api/projects'))
+const api = useApi()
+const localFirst = useLocalFirst<Project>('projects', () => api<Project[]>('/api/projects'))
 const optimistic = useOptimistic(localFirst)
 
 const showSlidePanel = ref(false)
@@ -54,7 +55,7 @@ async function createProject() {
   
   await optimistic.optimisticAdd(
     async (project) => {
-      return await $fetch<Project>('/api/projects', {
+      return await api<Project>('/api/projects', {
         method: 'POST',
         body: {
           name: project.name,
@@ -70,7 +71,7 @@ async function createProject() {
 async function deleteProject(id: string) {
   await optimistic.optimisticDelete(
     async (projectId) => {
-      await $fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
+      await api(`/api/projects/${projectId}`, { method: 'DELETE' })
     },
     id
   )
@@ -79,7 +80,7 @@ async function deleteProject(id: string) {
 async function updateProjectStatus(id: string, status: ProjectStatus) {
   await optimistic.optimisticUpdate(
     async (projectId, updates) => {
-      return await $fetch<Project>(`/api/projects/${projectId}`, {
+      return await api<Project>(`/api/projects/${projectId}`, {
         method: 'PATCH',
         body: updates
       })
@@ -165,7 +166,7 @@ onMounted(() => localFirst.init())
         </p>
         
         <div class="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{{ project._count?.issues || 0 }} issues</span>
+          <span>{{ project.issueCount ?? 0 }} issues</span>
         </div>
       </NuxtLink>
     </div>

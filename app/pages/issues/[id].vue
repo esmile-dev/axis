@@ -67,7 +67,8 @@ const typeOptions = [
   { value: 'IMPROVEMENT', label: 'Improvement', emoji: '🔧' },
 ]
 
-const { data: projects } = useAsyncData('projects', () => $fetch('/api/projects'))
+const api = useApi()
+const { data: projects } = useAsyncData('projects', () => api('/api/projects'))
 
 const currentStatus = computed(() => statusOptions.find(o => o.value === issue.value?.status))
 const currentPriority = computed(() => priorityOptions.find(o => o.value === issue.value?.priority))
@@ -78,7 +79,7 @@ async function loadIssue() {
   if (!issueId.value) return
   isLoading.value = true
   try {
-    const data = await $fetch(`/api/issues/${issueId.value}`)
+    const data = await api(`/api/issues/${issueId.value}`)
     issue.value = data
     comments.value = data.comments || []
   } catch (err) {
@@ -104,7 +105,7 @@ async function saveIssue() {
   if (!issue.value || !issueId.value) return
   isSaving.value = true
   try {
-    await $fetch(`/api/issues/${issueId.value}`, {
+    await api(`/api/issues/${issueId.value}`, {
       method: 'PATCH',
       body: {
         title: issue.value.title,
@@ -133,7 +134,7 @@ async function addComment() {
   if (!newComment.value.trim() || !issueId.value) return
   
   try {
-    const comment = await $fetch(`/api/issues/${issueId.value}/comments`, {
+    const comment = await api(`/api/issues/${issueId.value}/comments`, {
       method: 'POST',
       body: { content: newComment.value }
     })
@@ -177,7 +178,7 @@ async function deleteIssue() {
   if (!issueId.value || isDeleting.value) return
   isDeleting.value = true
   try {
-    await $fetch(`/api/issues/${issueId.value}`, { method: 'DELETE' })
+    await api(`/api/issues/${issueId.value}`, { method: 'DELETE' })
     showDeleteConfirm.value = false
     router.push('/')
   } catch (err) {

@@ -69,7 +69,8 @@ const typeOptions = [
   { value: 'IMPROVEMENT', label: 'Improvement', emoji: '🔧' },
 ]
 
-const { data: projects } = useAsyncData('projects-for-convert', () => $fetch('/api/projects'))
+const api = useApi()
+const { data: projects } = useAsyncData('projects-for-convert', () => api('/api/projects'))
 
 const currentPriority = computed(() => priorityOptions.find(o => o.value === issuePriority.value))
 const currentType = computed(() => typeOptions.find(o => o.value === issueType.value))
