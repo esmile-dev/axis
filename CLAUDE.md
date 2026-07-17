@@ -9,23 +9,25 @@ AI Station - 个人工作站，管理从灵感捕捉到需求落地的完整生�
 ## Development Commands
 
 ```bash
-npm run dev          # 启动开发服务器 (localhost:3000)
+npm run dev          # 启动前端 (localhost:7788)
 npm run build        # 生产构建
 npm run preview      # 预览构建结果
 
-npx prisma generate  # 生成 Prisma 客户端（修改 schema 后必须执行）
-npx prisma migrate dev --name <name>  # 创建迁移
-npx prisma studio    # 打开数据库 GUI
+cd axis-backend && mvn spring-boot:run   # 启动 Spring Boot 后端 (localhost:8080)
+cd axis-backend && mvn compile            # 编译后端
 ```
 
 ## Tech Stack
 
-- **Nuxt 4** + **Vue 3** Composition API + **TypeScript**
-- **Prisma 7** ORM + **PostgreSQL**（支持 Supabase/Neon）
-- **Tailwind CSS** + **Shadcn-Vue** (基于 Reka UI) + **Lucide Vue Next** 图标
-- **Pinia** 状态管理 + **VueUse** 工具库
+- **前端**：Nuxt 4 + Vue 3 Composition API + TypeScript
+- **后端**：Spring Boot 4.0 + Spring Data JPA + Spring AI 2.0（见 `axis-backend/`）
+- **数据库**：PostgreSQL（共用 axis schema）
+- **UI**：Tailwind CSS + Shadcn-Vue (基于 Reka UI) + Lucide Vue Next 图标
+- **状态管理**：Pinia + VueUse
 
-## Architecture Patterns
+## Architecture
+
+前后端分离：前端通过 `app/composables/useApi.ts`（基于 `runtimeConfig.public.apiBase`）调用 Spring Boot REST API。
 
 ### Local-First (首屏秒开)
 `app/composables/useLocalFirst.ts` - 页面优先从 LocalStorage 读取缓存立即渲染，后台静默同步数据库。所有使用此模式的页面必须调用 `init()` 初始化。
@@ -33,8 +35,9 @@ npx prisma studio    # 打开数据库 GUI
 ### Optimistic UI (乐观更新)
 `app/composables/useOptimistic.ts` - 操作时前端状态先切换，后端静默同步，失败则回滚。配合 `useLocalFirst` 使用。
 
-### Prisma 客户端位置
-Prisma 客户端生成到 `app/generated/prisma/` 而非默认的 `node_modules`，需要在 `app/` 内部导入。
+### 后端调用约定
+- 全部走 `useApi()` 的 `$fetch` 实例，自动带 `baseURL` 指向 Spring Boot
+- 流式 SSE 端点（如 `/api/agent/expand`）直接用 `fetch + ReadableStream`，绕过 `$fetch`
 
 ## Key Structure
 
@@ -44,18 +47,23 @@ app/
 │   ├── ui/              # Shadcn-Vue 基础组件
 │   ├── CommandPalette.vue  # ⌘K 全局命令面板
 │   └── Issue*.vue       # Issue 相关业务组件
-├── composables/         # useLocalFirst, useOptimistic
-├── generated/prisma/    # Prisma 生成的客户端
+├── composables/         # useApi, useLocalFirst, useOptimistic, useImageUpload
 ├── pages/
 │   ├── index.vue        # Inbox 页面
 │   ├── todo.vue         # Todo 页面
 │   ├── projects/        # Project 管理
 │   ├── issues/[id].vue  # Issue 详情
 │   └── knowledge.vue    # 知识库
-server/
-├── api/                 # RESTful API（按资源分目录）
-└── utils/prisma.ts      # Prisma 单例，使用 PrismaPg 适配器
-prisma/schema.prisma     # 数据模型定义
+axis-backend/
+├── src/main/java/com/axis/
+│   ├── controller/      # REST API（Inbox/Project/Issue/Knowledge/FileUpload/Health）
+│   ├── service/         # 业务逻辑
+│   ├── repository/      # Spring Data JPA
+│   ├── entity/          # JPA 实体
+│   ├── enums/           # 枚举定义
+│   ├── config/          # CORS、AI 配置
+│   └── ai/              # Spring AI Agent 模块（controller/tool/...）
+└── pom.xml
 ```
 
 ## Data Model
@@ -133,8 +141,6 @@ Source: [Andrej Karpathy Skills](https://github.com/multica-ai/andrej-karpathy-s
 ## Pre-Commit
 
 **提交前必须测试。** 未验证 = 未完成。
-
-Nitro 动态路由：`[param]/index.get.ts` ✓，`[param].get.ts` ✗（被 Vue Router 拦截）
 
 ## Design & Interaction Reference
 
