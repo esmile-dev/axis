@@ -1,0 +1,45 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: axis-backend
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/axis?currentSchema=axis}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: axis
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+    open-in-view: false
+
+  ai:
+    openai:
+      api-key: ${AI_API_KEY:demo}
+      base-url: ${AI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${AI_MODEL:gpt-4o-mini}
+          temperature: 0.7
+
+# CORS configuration
+app:
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:7788,http://localhost:3000}
+  upload:
+    dir: ${UPLOAD_DIR:./uploads}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
