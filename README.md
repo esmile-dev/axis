@@ -28,12 +28,16 @@
 
 ```
 axis/
-├── app/                          # 前端（Nuxt）
-│   ├── components/               # Vue 组件
-│   ├── composables/              # useApi / useLocalFirst / useOptimistic
-│   ├── layouts/                  # 布局
-│   └── pages/                    # 路由页面
-├── axis-backend/                 # 后端（Spring Boot）
+├── frontend/                     # 前端（Nuxt）
+│   ├── app/                      # Nuxt 应用源码
+│   │   ├── components/           # Vue 组件
+│   │   ├── composables/          # useApi / useLocalFirst / useOptimistic
+│   │   ├── layouts/              # 布局
+│   │   └── pages/                # 路由页面
+│   ├── nuxt.config.ts
+│   ├── package.json
+│   └── tailwind.config.js
+├── backend/                      # 后端（Spring Boot）
 │   ├── src/main/java/com/axis/
 │   │   ├── controller/           # REST API
 │   │   ├── service/              # 业务层
@@ -55,7 +59,7 @@ axis/
 ### 2. 启动后端（端口 8080）
 
 ```bash
-cd axis-backend
+cd backend
 ./mvnw spring-boot:run
 ```
 
@@ -67,6 +71,7 @@ cd axis-backend
 ### 3. 启动前端（端口 7788）
 
 ```bash
+cd frontend
 npm install
 npm run dev
 ```
@@ -106,11 +111,11 @@ Issue 状态：`TODO` / `IN_PROGRESS` / `IN_REVIEW` / `DONE` / `CANCELLED`
 ## 生产部署
 
 ```bash
-npm run build
-npm run preview
+cd frontend && npm run build
+cd frontend && npm run preview
 ```
 
-后端打包：`cd axis-backend && ./mvnw package`
+后端打包：`cd backend && ./mvnw package`
 
 ## License
 

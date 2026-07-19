@@ -9,31 +9,31 @@ AI Station - 个人工作站，管理从灵感捕捉到需求落地的完整生�
 ## Development Commands
 
 ```bash
-npm run dev          # 启动前端 (localhost:7788)
-npm run build        # 生产构建
-npm run preview      # 预览构建结果
+cd frontend && npm run dev          # 启动前端 (localhost:7788)
+cd frontend && npm run build        # 生产构建
+cd frontend && npm run preview      # 预览构建结果
 
-cd axis-backend && mvn spring-boot:run   # 启动 Spring Boot 后端 (localhost:8080)
-cd axis-backend && mvn compile            # 编译后端
+cd backend && mvn spring-boot:run   # 启动 Spring Boot 后端 (localhost:8080)
+cd backend && mvn compile           # 编译后端
 ```
 
 ## Tech Stack
 
 - **前端**：Nuxt 4 + Vue 3 Composition API + TypeScript
-- **后端**：Spring Boot 4.0 + Spring Data JPA + Spring AI 2.0（见 `axis-backend/`）
+- **后端**：Spring Boot 4.0 + Spring Data JPA + Spring AI 2.0（见 `backend/`）
 - **数据库**：PostgreSQL（共用 axis schema）
 - **UI**：Tailwind CSS + Shadcn-Vue (基于 Reka UI) + Lucide Vue Next 图标
 - **状态管理**：Pinia + VueUse
 
 ## Architecture
 
-前后端分离：前端通过 `app/composables/useApi.ts`（基于 `runtimeConfig.public.apiBase`）调用 Spring Boot REST API。
+前后端分离：前端通过 `frontend/app/composables/useApi.ts`（基于 `runtimeConfig.public.apiBase`）调用 Spring Boot REST API。
 
 ### Local-First (首屏秒开)
-`app/composables/useLocalFirst.ts` - 页面优先从 LocalStorage 读取缓存立即渲染，后台静默同步数据库。所有使用此模式的页面必须调用 `init()` 初始化。
+`frontend/app/composables/useLocalFirst.ts` - 页面优先从 LocalStorage 读取缓存立即渲染，后台静默同步数据库。所有使用此模式的页面必须调用 `init()` 初始化。
 
 ### Optimistic UI (乐观更新)
-`app/composables/useOptimistic.ts` - 操作时前端状态先切换，后端静默同步，失败则回滚。配合 `useLocalFirst` 使用。
+`frontend/app/composables/useOptimistic.ts` - 操作时前端状态先切换，后端静默同步，失败则回滚。配合 `useLocalFirst` 使用。
 
 ### 后端调用约定
 - 全部走 `useApi()` 的 `$fetch` 实例，自动带 `baseURL` 指向 Spring Boot
@@ -42,19 +42,23 @@ cd axis-backend && mvn compile            # 编译后端
 ## Key Structure
 
 ```
-app/
-├── components/
-│   ├── ui/              # Shadcn-Vue 基础组件
-│   ├── CommandPalette.vue  # ⌘K 全局命令面板
-│   └── Issue*.vue       # Issue 相关业务组件
-├── composables/         # useApi, useLocalFirst, useOptimistic, useImageUpload
-├── pages/
-│   ├── index.vue        # Inbox 页面
-│   ├── todo.vue         # Todo 页面
-│   ├── projects/        # Project 管理
-│   ├── issues/[id].vue  # Issue 详情
-│   └── knowledge.vue    # 知识库
-axis-backend/
+frontend/
+├── app/
+│   ├── components/
+│   │   ├── ui/              # Shadcn-Vue 基础组件
+│   │   ├── CommandPalette.vue  # ⌘K 全局命令面板
+│   │   └── Issue*.vue       # Issue 相关业务组件
+│   ├── composables/         # useApi, useLocalFirst, useOptimistic, useImageUpload
+│   ├── pages/
+│   │   ├── index.vue        # Inbox 页面
+│   │   ├── todo.vue         # Todo 页面
+│   │   ├── projects/        # Project 管理
+│   │   ├── issues/[id].vue  # Issue 详情
+│   │   └── knowledge.vue    # 知识库
+├── nuxt.config.ts
+├── package.json
+└── tailwind.config.js
+backend/
 ├── src/main/java/com/axis/
 │   ├── controller/      # REST API（Inbox/Project/Issue/Knowledge/FileUpload/Health）
 │   ├── service/         # 业务逻辑

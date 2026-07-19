@@ -10,7 +10,7 @@ dist
 node_modules
 
 # Java / Maven (Spring Boot)
-axis-backend/target/
+backend/target/
 *.class
 
 # Logs
