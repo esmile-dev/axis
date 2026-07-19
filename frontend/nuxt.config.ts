@@ -8,7 +8,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      apiBase: process.env.AXIS_API_BASE || 'http://localhost:8080'
+      apiBase: process.env.AXIS_API_BASE || 'http://localhost:7789'
     }
   },
   components: {
