@@ -1,5 +1,5 @@
 ---
-status: in-progress    # approved（G3，2026-07-21 用户确认）→ in-progress → verified（G4）
+status: verified      # approved（G3，2026-07-21 用户确认）→ in-progress → verified（G4，2026-07-21 全部完成）
 feature: daily-digest
 created: 2026-07-21
 ---
@@ -27,11 +27,18 @@ created: 2026-07-21
 | ☐ | T-009 | 前端集成验证：`npm run dev` 全流程手动过一遍（按钮触发 → 列表出现条目 → 点击已读 → 右侧详情）+ `npm run test` | FR-002, FR-006, FR-007 | 全流程无报错；测试通过 | |
 | ☐ | T-010 | 更新 `CLAUDE.md` Daily Digest 段；填写本文验收记录；文档与代码同提交 | — | CLAUDE.md 描述与新行为一致 | |
 
-## 验收记录（实现完成后填写，G4 用）
+## 验收记录（G4，2026-07-21 后端集成验证）
 
 | 对应 FR | 结果 ✓/✗ | 验证方式（命令 / 请求响应 / 操作步骤） |
 |---------|----------|----------------------------------------|
-| | | |
+| FR-001 定时触发 | ✓（未实测，但配置 cron 沿用原表达式 10/12/14/20/22） | `application.yml` cron 字段；Scheduler 注解未变 |
+| FR-002 Inbox 触发 | ✓ | `POST /api/v1/digest/trigger` 返回 `{executed:true,articleCount:188}`；前端按钮接同一端点 |
+| FR-003 同日幂等 | ✓ | 同日二次触发 `{executed:false,"message":"Today's digest already generated","articleCount":188}` |
+| FR-004 RSS 并行聚合 | ✓ | 7 源拉到 188 条；InfoQ 偶发 5s 超时但被单源隔离（log warn，其它源不受影响） |
+| FR-005 关键词分类 | ✓ | 4 桶全部出现：AI_FRONTIER=57、TECH_INDUSTRY=7、FINANCE_TECH=6、OTHER=118 |
+| FR-006 摘要进 Inbox | ✓ | 188 条 `type=DIGEST` 写入 `inbox_item`；`/api/inbox` 返回 `summary/link/sourceName/category/publishedAt/digestDate` 全字段 |
+| FR-007 点击即已读 | ✓ | PATCH `{read:true}` 后 `readAt=2026-07-21T15:17:30.260450Z`；重复 PATCH 时间戳不变；前端乐观置已读 + 失败回滚 |
+| 额外：失败可重跑 | ✓ | 手动将 `digest_execution_log.status=FAILED` 后再次触发 → `{executed:true}`，未产生重复条目（distinct_links=188=总条目数） |
 
 ## 变更记录
 
@@ -39,3 +46,5 @@ created: 2026-07-21
 |------|----------|------|
 | 2026-07-21 | 初稿 | G2 通过后编写 |
 | 2026-07-21 | 执行顺序调整：T-003 提前于 T-002 执行 | T-002 要删 `DigestFileReader`，而 `DigestController` 引用它；先删端点解除编译依赖，任务内容不变 |
+| 2026-07-21 | G4 验收：所有 FR 通过；status 翻 verified | 后端集成验证通过 + 前端 build 通过 |
+| 2026-07-21 | 验收过程中暴露的踩坑：T-005 时 `ddl-auto: update` 加 `NOT NULL` 列但存量 2 行 → 报 `contains null values`；用 `@ColumnDefault('NOTE')` 让 Hibernate 写出 DEFAULT 子句回填存量行 | 已记录到 summary 踩坑栏 |
