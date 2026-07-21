@@ -5,6 +5,7 @@ import com.axis.enums.InboxItemStatus;
 import com.axis.enums.InboxItemType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -35,6 +36,7 @@ public class InboxItem {
     /** NOTE=手动笔记；DIGEST=Daily Digest 文章（此时 content 存文章标题） */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @ColumnDefault("'NOTE'")
     @Builder.Default
     private InboxItemType type = InboxItemType.NOTE;
 
