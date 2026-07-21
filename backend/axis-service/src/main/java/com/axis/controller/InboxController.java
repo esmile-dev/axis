@@ -31,7 +31,8 @@ public class InboxController {
 
     @PatchMapping("/{id}")
     public InboxItem update(@PathVariable String id, @RequestBody Map<String, String> body) {
-        return inboxService.update(id, body.get("content"), body.get("status"));
+        return inboxService.update(id, body.get("content"), body.get("status"),
+                "true".equalsIgnoreCase(body.get("read")));
     }
 
     @DeleteMapping("/{id}")

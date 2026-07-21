@@ -42,7 +42,7 @@ public class InboxTool {
     @Tool(description = "将 Inbox 条目标记为已完成（DONE）")
     public String markInboxDone(
             @ToolParam(description = "Inbox 条目的 ID") String id) {
-        inboxService.update(id, null, "DONE");
+        inboxService.update(id, null, "DONE", false);
         return "✅ 已标记为完成";
     }
 

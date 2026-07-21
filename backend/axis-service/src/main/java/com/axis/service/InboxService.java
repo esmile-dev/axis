@@ -55,7 +55,7 @@ public class InboxService {
     }
 
     @Transactional
-    public InboxItem update(String id, String content, String status) {
+    public InboxItem update(String id, String content, String status, boolean read) {
         InboxItem item = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("InboxItem not found: " + id));
         if (content != null) {
@@ -63,6 +63,10 @@ public class InboxService {
         }
         if (status != null) {
             item.setStatus(InboxItemStatus.valueOf(status));
+        }
+        // 已读标记：只置一次，不覆盖（「看过」不可逆）
+        if (read && item.getReadAt() == null) {
+            item.setReadAt(Instant.now());
         }
         return repository.save(item);
     }
