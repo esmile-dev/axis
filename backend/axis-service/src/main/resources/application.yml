@@ -6,17 +6,16 @@ spring:
     name: axis-backend
 
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/axis?currentSchema=axis}
-    username: ${DB_USERNAME:postgres}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${DB_USERNAME:alan}
     password: ${DB_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     properties:
       hibernate:
-        default_schema: axis
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
     show-sql: false
@@ -37,6 +36,36 @@ app:
     allowed-origins: ${CORS_ORIGINS:http://localhost:7788,http://localhost:3000}
   upload:
     dir: ${UPLOAD_DIR:./uploads}
+
+  # Daily Digest feature — see features/daily-digest/REQUIREMENTS.md
+  digest:
+    # Trigger times: 10:00, 12:00, 14:00, 20:00, 22:00 daily
+    cron: "0 0 10,12,14,20,22 * * *"
+    # Directory holding daily-YYYY-MM-DD.md files
+    inbox-dir: ${DIGEST_INBOX_DIR:./inbox}
+    # RSS sources (Chinese tech media)
+    rss-sources:
+      - name: 36氪
+        url: https://36kr.com/feed
+      - name: 机器之心
+        url: https://www.jiqizhixin.com/rss
+      - name: InfoQ
+        url: https://feed.infoq.com/
+      - name: 虎嗅科技版
+        url: https://www.huxiu.com/rss/0.xml
+    # Classifier — case-insensitive substring match against title + summary
+    classifier:
+      impl: keyword
+      keywords:
+        ai-frontier: AI,LLM,GPT,multimodal,embodied,chip,GPU,PyTorch,JAX,alignment,大模型,ChatGPT,Sora,具身智能,算力
+        tech-industry: cloud,database,DB,HarmonyOS,Android,iOS,kubernetes,microservice,distributed,frontend,鸿蒙,微服务
+        finance-tech: NVIDIA,TSMC,BAT,earnings,财报,investment,市值,半导体,投融资
+    # Timeouts (seconds)
+    timeout:
+      per-source-seconds: 5
+      total-seconds: 15
+    # Parallel fetch thread pool
+    thread-pool-size: 8
 
 management:
   endpoints:

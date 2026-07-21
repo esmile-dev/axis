@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { Trash2, Send, Cloud, CloudOff, Search, Filter, Calendar } from 'lucide-vue-next'
+import { ref, computed, watch, onMounted } from 'vue'
+import { Trash2, Send, Cloud, CloudOff, Search, Filter, Calendar, Newspaper } from 'lucide-vue-next'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import InboxItemCard from '@/components/InboxItemCard.vue'
 import InboxDetailPanel from '@/components/InboxDetailPanel.vue'
 import InboxConvertDialog from '@/components/InboxConvertDialog.vue'
+import DigestViewer from '@/components/DigestViewer.vue'
 
 interface InboxItem {
   id: string
@@ -35,6 +36,33 @@ const selectedItemId = ref<string | null>(null)
 const selectedItem = computed(() => {
   return localFirst.items.value.find(item => item.id === selectedItemId.value) || null
 })
+
+// Daily digest summary (just metadata for the left-panel row)
+const digestSummary = ref<{ date: string; articleCount: number } | null>(null)
+
+// The digest row is "selected" (highlighted) whenever the right panel is showing
+// the digest — i.e., when no inbox item is selected.
+const isDigestRowActive = computed(() => selectedItem.value === null)
+
+async function loadDigestSummary() {
+  try {
+    const entry = await $fetch<{ date: string; content: string; articleCount: number }>(
+      `${useRuntimeConfig().public.apiBase}/api/v1/digest/latest`,
+      { ignoreResponseError: true }
+    )
+    if (entry && typeof entry === 'object' && 'content' in entry) {
+      digestSummary.value = { date: entry.date, articleCount: entry.articleCount }
+    } else {
+      digestSummary.value = null
+    }
+  } catch {
+    digestSummary.value = null
+  }
+}
+
+function selectDigest() {
+  selectedItemId.value = null
+}
 
 // Convert dialog
 const convertDialogOpen = ref(false)
@@ -239,7 +267,10 @@ const timeFilterOptions = [
 const currentStatusLabel = computed(() => statusFilterOptions.find(o => o.value === filterStatus.value)?.label || 'All')
 const currentTimeLabel = computed(() => timeFilterOptions.find(o => o.value === filterTime.value)?.label || 'All time')
 
-onMounted(() => localFirst.init())
+onMounted(() => {
+  localFirst.init()
+  loadDigestSummary()
+})
 </script>
 
 <template>
@@ -335,6 +366,31 @@ onMounted(() => localFirst.init())
             />
           </TransitionGroup>
 
+          <!-- Daily digest row (below items) -->
+          <button
+            v-if="digestSummary"
+            class="mx-3 mb-2 w-[calc(100%-24px)] flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors border"
+            :class="isDigestRowActive
+              ? 'bg-primary/10 border-primary/40'
+              : 'bg-secondary/10 border-border/30 hover:bg-secondary/20 hover:border-border/60'"
+            @click="selectDigest"
+          >
+            <div class="w-7 h-7 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
+              <Newspaper class="w-3.5 h-3.5 text-primary" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-semibold tracking-tight">今日新闻摘要</span>
+                <span class="text-[10px] text-muted-foreground whitespace-nowrap">
+                  {{ digestSummary.articleCount }} 篇
+                </span>
+              </div>
+              <div class="text-[11px] text-muted-foreground mt-0.5 truncate">
+                {{ digestSummary.date }}
+              </div>
+            </div>
+          </button>
+
           <!-- Empty State -->
           <div v-if="filteredItems.length === 0" class="text-center py-20 text-muted-foreground">
             <Send class="w-12 h-12 mx-auto mb-4 opacity-20" />
@@ -360,15 +416,17 @@ onMounted(() => localFirst.init())
         </div>
       </div>
 
-      <!-- Right Panel: Detail -->
+      <!-- Right Panel: Item Detail or Digest -->
       <div class="flex-1 bg-background">
         <InboxDetailPanel
+          v-if="selectedItem"
           :item="selectedItem"
           @update="updateItem"
           @convert-to-issue="openConvertDialog('issue')"
           @convert-to-project="openConvertDialog('project')"
           @delete="deleteItem"
         />
+        <DigestViewer v-else />
       </div>
     </div>
 

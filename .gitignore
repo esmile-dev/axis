@@ -13,6 +13,9 @@ node_modules
 backend/target/
 *.class
 
+# Daily Digest 运行产物（daily-YYYY-MM-DD.md）
+backend/inbox/
+
 # Logs
 logs
 *.log
