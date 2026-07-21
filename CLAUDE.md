@@ -12,16 +12,21 @@ AI Station - 个人工作站，管理从灵感捕捉到需求落地的完整生�
 cd frontend && npm run dev          # 启动前端 (localhost:7788)
 cd frontend && npm run build        # 生产构建
 cd frontend && npm run preview      # 预览构建结果
+cd frontend && npm run test         # Vitest 跑全部前端测试
+cd frontend && npx vitest run <file>  # 跑单个测试文件
 
-cd backend && mvn spring-boot:run   # 启动 Spring Boot 后端 (localhost:8080)
+cd backend && mvn spring-boot:run -pl axis-agent -am   # 启动 Spring Boot 后端 (localhost:7789)
 cd backend && mvn compile           # 编译后端
+cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个后端测试
 ```
+
+注意：后端只有 `axis-agent` 模块含 `AxisApplication` 主类，`spring-boot:run` 必须指定 `-pl axis-agent`（`-am` 同时构建依赖的 `axis-service`）。仓库无 Maven Wrapper，使用系统 `mvn`。
 
 ## Tech Stack
 
 - **前端**：Nuxt 4 + Vue 3 Composition API + TypeScript
 - **后端**：Spring Boot 4.0 + Spring Data JPA + Spring AI 2.0（见 `backend/`）
-- **数据库**：PostgreSQL（共用 axis schema）
+- **数据库**：PostgreSQL（本地默认 `postgres` 库，schema 为 `public`，连接配置见 `application.yml`）
 - **UI**：Tailwind CSS + Shadcn-Vue (基于 Reka UI) + Lucide Vue Next 图标
 - **状态管理**：Pinia + VueUse
 
@@ -37,7 +42,10 @@ cd backend && mvn compile           # 编译后端
 
 ### 后端调用约定
 - 全部走 `useApi()` 的 `$fetch` 实例，自动带 `baseURL` 指向 Spring Boot
-- 流式 SSE 端点（如 `/api/agent/expand`）直接用 `fetch + ReadableStream`，绕过 `$fetch`
+- 流式 SSE 端点（`/api/agent/chat`、`/api/agent/expand`）直接用 `fetch + ReadableStream`，绕过 `$fetch`
+
+### Daily Digest（每日技术摘要）
+跨模块功能：逻辑在 `axis-service` 的 `com.axis.digest`（RSS 抓取 → 关键词分类 → 写入 `daily-YYYY-MM-DD.md` 到 `DIGEST_INBOX_DIR`，默认 `./inbox`），REST 入口在 `axis-agent` 的 `/api/v1/digest`（trigger/latest/recent）。Scheduler 按 cron 每天 10/12/14/20/22 点触发。需求文档见 `docs/feature/daily-digest/requirements.md`。
 
 ## Key Structure
 
@@ -59,20 +67,43 @@ frontend/
 ├── package.json
 └── tailwind.config.js
 backend/
-├── src/main/java/com/axis/
-│   ├── controller/      # REST API（Inbox/Project/Issue/Knowledge/FileUpload/Health）
-│   ├── service/         # 业务逻辑
-│   ├── repository/      # Spring Data JPA
-│   ├── entity/          # JPA 实体
-│   ├── enums/           # 枚举定义
-│   ├── config/          # CORS、AI 配置
-│   └── ai/              # Spring AI Agent 模块（controller/tool/...）
-└── pom.xml
+├── pom.xml                  # 父 POM (packaging=pom)，无 Maven Wrapper
+├── inbox/                   # Daily Digest 输出目录 (daily-YYYY-MM-DD.md)
+├── axis-service/            # 业务核心模块 (jar，无主类不可独立启动)
+│   └── src/main/java/com/axis/
+│       ├── controller/      # REST API（Inbox/Project/Issue/Knowledge/FileUpload/Health）
+│       ├── service/         # 业务逻辑
+│       ├── repository/      # Spring Data JPA
+│       ├── entity/          # JPA 实体
+│       ├── enums/           # 枚举定义
+│       ├── digest/          # Daily Digest：fetch/classify/scheduler/store
+│       └── config/          # CORS 配置
+└── axis-agent/              # AI Agent 模块（依赖 axis-service，产出可执行 fat jar）
+    └── src/main/java/com/axis/
+        ├── AxisApplication.java  # Spring Boot 主类（扫描整个 com.axis）
+        ├── config/AiConfig.java  # ChatClient / ChatMemory 配置
+        ├── digest/controller/    # /api/v1/digest REST 入口
+        └── ai/              # Spring AI Agent（controller/tool，Tools: Inbox/Issue/Project/Knowledge）
+docs/
+├── workflow.md          # 开发流程宪章：分级/门禁/豁免（开工前必读）
+└── feature/             # 功能文档：_template/ + <功能名>/{requirements,design,tasks,summary}.md
 ```
+
+后端配置集中在 `axis-service/src/main/resources/application.yml`（端口、数据源、AI、digest cron/RSS 源均支持环境变量覆盖）。
 
 ## Data Model
 
 核心实体关系：`Project` 1:N `Issue` 1:N `Comment`。Issue 使用枚举定义 `IssueStatus`/`IssuePriority`/`IssueType`。
+
+## Feature 开发文档流 (Spec-Driven)
+
+详细流程见 `docs/workflow.md`（**开工前必读**），核心规则：
+
+- 新需求先分级（S/M/L），AI 提议、用户确认：S 直接改；M 写一份 `lite-spec.md`；L 走完整文档流
+- L 级在 `docs/feature/<功能名>/` 依次产出 requirements → design → tasks；每份 front-matter 的 `status` 被确认改为 `approved` 后才进入下一阶段；验收通过（verified）后写 summary 复盘归档
+- 编码严格按 tasks 任务表执行：完成一个任务打一个勾并填 commit hash；不做任务表之外的事
+- 需要偏离已批准文档时：停下，在该文档「变更记录」写明，等确认后再继续
+- 文档风格：语言简洁，优先 Mermaid 图和表格；模板在 `docs/feature/_template/`
 
 ## Coding Guidelines (from Karpathy's Approach)
 

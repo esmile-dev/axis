@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "issue", schema = "axis")
+@Table(name = "issue")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -51,11 +51,11 @@ public class Issue {
     @Builder.Default
     private Integer order = 0;
 
-    @Column(name = "projectId", insertable = false, updatable = false)
+    @Column(name = "project_id", insertable = false, updatable = false)
     private String projectId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "projectId")
+    @JoinColumn(name = "project_id")
     @JsonIgnoreProperties({"issues", "hibernateLazyInitializer"})
     private Project project;
 

@@ -67,3 +67,4 @@ public class IssueTool {
         return "🗑️ Issue 已删除";
     }
 }
+

@@ -1,6 +1,5 @@
 package com.axis.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -9,28 +8,23 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.Instant;
 
 @Entity
-@Table(name = "comment", schema = "axis")
+@Table(name = "knowledge_document")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Comment {
+public class KnowledgeDocument {
 
     @Id
     @Column(length = 30)
     private String id;
 
+    @Column(nullable = false)
+    private String title;
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
-
-    @Column(name = "issueId", insertable = false, updatable = false)
-    private String issueId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "issueId", nullable = false)
-    @JsonIgnoreProperties({"comments", "project", "hibernateLazyInitializer"})
-    private Issue issue;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
