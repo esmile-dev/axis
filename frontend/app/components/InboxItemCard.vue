@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { Circle, CircleCheck, Trash2 } from 'lucide-vue-next'
 
+type DigestCategory = 'AI_FRONTIER' | 'TECH_INDUSTRY' | 'FINANCE_TECH' | 'OTHER'
+type ItemType = 'NOTE' | 'DIGEST'
+
 interface InboxItem {
   id: string
   content: string
   status: 'TODO' | 'DONE'
+  type?: ItemType
+  sourceName?: string | null
+  category?: DigestCategory | null
+  readAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -34,6 +41,24 @@ function formatRelativeTime(dateStr: string): string {
   if (diffDays < 7) return `${diffDays}d ago`
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
+
+const isDigest = computed(() => props.item.type === 'DIGEST')
+const isUnread = computed(() => isDigest.value && !props.item.readAt)
+const categoryLabel = computed(() => {
+  const map: Record<string, string> = {
+    AI_FRONTIER: 'AI', TECH_INDUSTRY: 'Tech', FINANCE_TECH: '财经', OTHER: '其它'
+  }
+  return props.item.category ? (map[props.item.category] ?? props.item.category) : null
+})
+const categoryClasses = computed(() => {
+  const map: Record<string, string> = {
+    AI_FRONTIER: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+    TECH_INDUSTRY: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+    FINANCE_TECH: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    OTHER: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
+  }
+  return props.item.category ? (map[props.item.category] ?? '') : ''
+})
 </script>
 
 <template>
@@ -44,6 +69,13 @@ function formatRelativeTime(dateStr: string): string {
     ]"
     @click="emit('select', item.id)"
   >
+    <!-- Unread dot (digest only) -->
+    <span
+      v-if="isUnread"
+      class="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-primary"
+      aria-label="未看"
+    />
+
     <!-- Status Toggle -->
     <button
       @click.stop="emit('toggleStatus', item.id)"
@@ -66,6 +98,14 @@ function formatRelativeTime(dateStr: string): string {
       >
         {{ item.content }}
       </p>
+      <div v-if="isDigest && (item.sourceName || categoryLabel)" class="flex items-center gap-1.5 mt-0.5">
+        <span v-if="categoryLabel" class="text-[10px] px-1.5 py-px rounded border" :class="categoryClasses">
+          {{ categoryLabel }}
+        </span>
+        <span v-if="item.sourceName" class="text-[10px] text-muted-foreground truncate">
+          {{ item.sourceName }}
+        </span>
+      </div>
     </div>
 
     <!-- Time -->

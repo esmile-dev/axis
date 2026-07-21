@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import { CircleCheck, Circle, ArrowRightLeft, FolderPlus, Clock } from 'lucide-vue-next'
+import { CircleCheck, Circle, ArrowRightLeft, FolderPlus, Clock, ExternalLink, Newspaper } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
+
+type DigestCategory = 'AI_FRONTIER' | 'TECH_INDUSTRY' | 'FINANCE_TECH' | 'OTHER'
+type ItemType = 'NOTE' | 'DIGEST'
 
 interface InboxItem {
   id: string
   content: string
   status: 'TODO' | 'DONE'
+  type?: ItemType
+  summary?: string | null
+  link?: string | null
+  sourceName?: string | null
+  category?: DigestCategory | null
+  publishedAt?: string | null
+  readAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -56,6 +66,15 @@ function formatDate(dateStr: string): string {
     minute: '2-digit'
   })
 }
+
+const isDigest = computed(() => props.item?.type === 'DIGEST')
+const categoryLabel = computed(() => {
+  if (!props.item?.category) return null
+  const map: Record<string, string> = {
+    AI_FRONTIER: 'AI 前沿', TECH_INDUSTRY: '技术产业', FINANCE_TECH: '财经科技', OTHER: '其他'
+  }
+  return map[props.item.category] ?? props.item.category
+})
 </script>
 
 <template>
@@ -90,9 +109,40 @@ function formatDate(dateStr: string): string {
       </div>
     </div>
 
-    <!-- Content Editor -->
-    <div class="flex-1 p-6">
+    <!-- Content -->
+    <div class="flex-1 p-6 overflow-auto">
+      <!-- DIGEST：标题 + 摘要 + 原文链接（只读） -->
+      <template v-if="isDigest">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+            <Newspaper class="w-3 h-3" />
+            Daily Digest
+          </span>
+          <span v-if="categoryLabel" class="text-xs px-2 py-0.5 rounded-md bg-secondary/30 text-muted-foreground">
+            {{ categoryLabel }}
+          </span>
+          <span v-if="item.sourceName" class="text-xs text-muted-foreground">
+            · {{ item.sourceName }}
+          </span>
+        </div>
+        <h1 class="text-2xl font-semibold leading-snug mb-4">{{ item.content }}</h1>
+        <p v-if="item.summary" class="text-base text-muted-foreground leading-relaxed mb-6 whitespace-pre-line">
+          {{ item.summary }}
+        </p>
+        <a
+          v-if="item.link"
+          :href="item.link"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+        >
+          <ExternalLink class="w-4 h-4" />
+          阅读原文
+        </a>
+      </template>
+      <!-- NOTE：可编辑 textarea -->
       <textarea
+        v-else
         v-model="localContent"
         @input="queueSave"
         placeholder="Edit content..."

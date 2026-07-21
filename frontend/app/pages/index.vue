@@ -12,12 +12,19 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import InboxItemCard from '@/components/InboxItemCard.vue'
 import InboxDetailPanel from '@/components/InboxDetailPanel.vue'
 import InboxConvertDialog from '@/components/InboxConvertDialog.vue'
-import DigestViewer from '@/components/DigestViewer.vue'
 
 interface InboxItem {
   id: string
   content: string
   status: 'TODO' | 'DONE'
+  type?: 'NOTE' | 'DIGEST'
+  summary?: string | null
+  link?: string | null
+  sourceName?: string | null
+  category?: 'AI_FRONTIER' | 'TECH_INDUSTRY' | 'FINANCE_TECH' | 'OTHER' | null
+  publishedAt?: string | null
+  readAt?: string | null
+  digestDate?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -37,31 +44,27 @@ const selectedItem = computed(() => {
   return localFirst.items.value.find(item => item.id === selectedItemId.value) || null
 })
 
-// Daily digest summary (just metadata for the left-panel row)
-const digestSummary = ref<{ date: string; articleCount: number } | null>(null)
+// Daily digest 手动触发（FR-002）
+const digestRunning = ref(false)
+const digestMessage = ref('')
 
-// The digest row is "selected" (highlighted) whenever the right panel is showing
-// the digest — i.e., when no inbox item is selected.
-const isDigestRowActive = computed(() => selectedItem.value === null)
-
-async function loadDigestSummary() {
+async function triggerDigest() {
+  if (digestRunning.value) return
+  digestRunning.value = true
+  digestMessage.value = ''
   try {
-    const entry = await $fetch<{ date: string; content: string; articleCount: number }>(
-      `${useRuntimeConfig().public.apiBase}/api/v1/digest/latest`,
-      { ignoreResponseError: true }
+    const res = await api<{ executed: boolean; message: string; articleCount: number }>(
+      '/api/v1/digest/trigger',
+      { method: 'POST' }
     )
-    if (entry && typeof entry === 'object' && 'content' in entry) {
-      digestSummary.value = { date: entry.date, articleCount: entry.articleCount }
-    } else {
-      digestSummary.value = null
-    }
-  } catch {
-    digestSummary.value = null
+    digestMessage.value = res.executed ? `已生成 ${res.articleCount} 篇` : '今日已生成'
+    await refreshWithFilters()
+  } catch (err) {
+    console.error('Digest trigger failed:', err)
+    digestMessage.value = '生成失败，请稍后重试'
+  } finally {
+    digestRunning.value = false
   }
-}
-
-function selectDigest() {
-  selectedItemId.value = null
 }
 
 // Convert dialog
@@ -193,6 +196,24 @@ async function toggleItemStatus(id: string) {
 
 function selectItem(id: string) {
   selectedItemId.value = id
+  const item = localFirst.items.value.find(i => i.id === id)
+  if (item) markItemRead(item)
+}
+
+// FR-007：点击 digest 条目即算看过（乐观置已读 + PATCH，失败回滚）
+async function markItemRead(item: InboxItem) {
+  if (item.type !== 'DIGEST' || item.readAt) return
+  const previous = item.readAt ?? null
+  item.readAt = new Date().toISOString()
+  try {
+    await api(`/api/inbox/${item.id}`, {
+      method: 'PATCH',
+      body: { read: true }
+    })
+  } catch (err) {
+    item.readAt = previous
+    console.error('Failed to mark item read:', err)
+  }
 }
 
 function openConvertDialog(mode: 'issue' | 'project') {
@@ -269,7 +290,6 @@ const currentTimeLabel = computed(() => timeFilterOptions.find(o => o.value === 
 
 onMounted(() => {
   localFirst.init()
-  loadDigestSummary()
 })
 </script>
 
@@ -281,10 +301,23 @@ onMounted(() => {
         <h1 class="text-2xl font-bold tracking-tight">Inbox</h1>
         <p class="text-sm text-muted-foreground">Capture thoughts and inspirations instantly.</p>
       </div>
-      <div class="flex items-center gap-2 text-xs text-muted-foreground">
-        <Cloud v-if="!localFirst.isSyncing.value" class="w-4 h-4" />
-        <CloudOff v-else class="w-4 h-4 animate-pulse" />
-        <span>{{ localFirst.isSyncing.value ? 'Syncing...' : 'Synced' }}</span>
+      <div class="flex items-center gap-3">
+        <Button
+          variant="outline"
+          size="sm"
+          class="h-8 px-3 text-xs bg-secondary/20 border-border/40 hover:bg-secondary/40"
+          :disabled="digestRunning"
+          @click="triggerDigest"
+        >
+          <Newspaper class="w-3.5 h-3.5 mr-1.5" />
+          {{ digestRunning ? '生成中…' : '生成今日摘要' }}
+        </Button>
+        <span v-if="digestMessage" class="text-xs text-muted-foreground">{{ digestMessage }}</span>
+        <div class="flex items-center gap-2 text-xs text-muted-foreground">
+          <Cloud v-if="!localFirst.isSyncing.value" class="w-4 h-4" />
+          <CloudOff v-else class="w-4 h-4 animate-pulse" />
+          <span>{{ localFirst.isSyncing.value ? 'Syncing...' : 'Synced' }}</span>
+        </div>
       </div>
     </header>
 
@@ -366,31 +399,6 @@ onMounted(() => {
             />
           </TransitionGroup>
 
-          <!-- Daily digest row (below items) -->
-          <button
-            v-if="digestSummary"
-            class="mx-3 mb-2 w-[calc(100%-24px)] flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors border"
-            :class="isDigestRowActive
-              ? 'bg-primary/10 border-primary/40'
-              : 'bg-secondary/10 border-border/30 hover:bg-secondary/20 hover:border-border/60'"
-            @click="selectDigest"
-          >
-            <div class="w-7 h-7 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
-              <Newspaper class="w-3.5 h-3.5 text-primary" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-xs font-semibold tracking-tight">今日新闻摘要</span>
-                <span class="text-[10px] text-muted-foreground whitespace-nowrap">
-                  {{ digestSummary.articleCount }} 篇
-                </span>
-              </div>
-              <div class="text-[11px] text-muted-foreground mt-0.5 truncate">
-                {{ digestSummary.date }}
-              </div>
-            </div>
-          </button>
-
           <!-- Empty State -->
           <div v-if="filteredItems.length === 0" class="text-center py-20 text-muted-foreground">
             <Send class="w-12 h-12 mx-auto mb-4 opacity-20" />
@@ -416,7 +424,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Right Panel: Item Detail or Digest -->
+      <!-- Right Panel: Item Detail -->
       <div class="flex-1 bg-background">
         <InboxDetailPanel
           v-if="selectedItem"
@@ -426,7 +434,10 @@ onMounted(() => {
           @convert-to-project="openConvertDialog('project')"
           @delete="deleteItem"
         />
-        <DigestViewer v-else />
+        <div v-else class="h-full flex flex-col items-center justify-center text-muted-foreground">
+          <Newspaper class="w-12 h-12 mb-4 opacity-20" />
+          <p class="text-sm">Select an item to view details</p>
+        </div>
       </div>
     </div>
 
