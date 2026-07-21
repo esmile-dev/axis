@@ -2,9 +2,11 @@ package com.axis.repository;
 
 import com.axis.entity.InboxItem;
 import com.axis.enums.InboxItemStatus;
+import com.axis.enums.InboxItemType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 public interface InboxItemRepository extends JpaRepository<InboxItem, String> {
@@ -22,4 +24,7 @@ public interface InboxItemRepository extends JpaRepository<InboxItem, String> {
 
     List<InboxItem> findByStatusAndContentContainingIgnoreCaseOrderByCreatedAtDesc(
             InboxItemStatus status, String search);
+
+    /** Retry cleanup for Daily Digest: remove a day's digest items before re-running. */
+    long deleteByTypeAndDigestDate(InboxItemType type, LocalDate digestDate);
 }

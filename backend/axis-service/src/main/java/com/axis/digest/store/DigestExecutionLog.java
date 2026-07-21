@@ -10,12 +10,10 @@ import java.time.LocalDate;
 /**
  * Records one digest execution per natural day.
  *
- * <p>Idempotency is enforced at three layers:
- * <ol>
- *   <li>DB unique constraint on {@code digest_date} (the hard guarantee).</li>
- *   <li>Pessimistic lock acquired via {@link DigestExecutionLogRepository#findByDigestDateForUpdate}.</li>
- *   <li>Application-level check in {@code DailyDigestService}.</li>
- * </ol>
+ * <p>Idempotency is enforced by the DB unique constraint on {@code digest_date}
+ * (the hard guarantee) plus an application-level check in {@code DailyDigestService}.
+ * Only a {@code COMPLETED} row blocks re-runs; {@code PENDING}/{@code FAILED}
+ * rows are retried.
  */
 @Entity
 @Table(

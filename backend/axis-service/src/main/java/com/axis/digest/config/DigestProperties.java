@@ -11,7 +11,6 @@ import java.util.List;
 @ConfigurationProperties(prefix = "app.digest")
 public record DigestProperties(
         String cron,
-        String inboxDir,
         List<RssSourceConfig> rssSources,
         ClassifierConfig classifier,
         TimeoutConfig timeout,
