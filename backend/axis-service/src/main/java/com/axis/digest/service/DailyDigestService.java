@@ -1,6 +1,7 @@
 package com.axis.digest.service;
 
 import com.axis.digest.classify.Classifier;
+import com.axis.digest.classify.DigestCategory;
 import com.axis.digest.fetch.Article;
 import com.axis.digest.fetch.RssFetcherService;
 import com.axis.digest.store.DigestExecutionLog;
@@ -16,8 +17,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -39,6 +45,16 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class DailyDigestService {
+
+    /** Section caps, ordered by importance: AI > Tech > Finance > Other. */
+    private static final Map<DigestCategory, Integer> SECTION_LIMITS =
+            new EnumMap<>(DigestCategory.class);
+    static {
+        SECTION_LIMITS.put(DigestCategory.AI_FRONTIER, 5);
+        SECTION_LIMITS.put(DigestCategory.TECH_INDUSTRY, 5);
+        SECTION_LIMITS.put(DigestCategory.FINANCE_TECH, 3);
+        SECTION_LIMITS.put(DigestCategory.OTHER, 3);
+    }
 
     private final DigestExecutionLogRepository repository;
     private final InboxItemRepository inboxItemRepository;
@@ -111,10 +127,13 @@ public class DailyDigestService {
             List<Article> classified = raw.stream()
                     .map(a -> a.withCategory(classifier.classify(a)))
                     .toList();
-            InboxItem item = toAggregateItem(classified, today);
+            // Cap per section (by importance) and cap overall; section order
+            // is preserved by the SECTION_LIMITS EnumMap iteration order.
+            List<Article> curated = curateBySection(classified, 16);
+            InboxItem item = toAggregateItem(curated, classified.size(), today);
             inboxItemRepository.save(item);
 
-            articleCount = classified.size();
+            articleCount = curated.size();
             logRow.setStatus(DigestExecutionStatus.COMPLETED);
             logRow.setArticleCount(articleCount);
             repository.save(logRow);
@@ -129,20 +148,56 @@ public class DailyDigestService {
     }
 
     /**
-     * Build the single daily-aggregated inbox item: {@code content} holds the display
-     * title, {@code longText} holds the article list as a JSON array — the frontend
-     * parses and renders it as the multi-card detail view.
+     * Group classified articles by category, take the configured cap per section
+     * (in importance order), and stop at {@code totalCap}. Articles within a
+     * section are sorted by {@code publishedAt DESC} (newest first); articles
+     * with no {@code publishedAt} are pushed to the end.
      */
-    private static InboxItem toAggregateItem(List<Article> articles, LocalDate today) {
+    private static List<Article> curateBySection(List<Article> classified, int totalCap) {
+        Map<DigestCategory, List<Article>> byCat = classified.stream()
+                .sorted(Comparator.comparing(
+                        (Article a) -> a.publishedAt() == null ? Instant.MIN : a.publishedAt()
+                ).reversed())
+                .collect(Collectors.groupingBy(
+                        Article::category,
+                        () -> new EnumMap<>(DigestCategory.class),
+                        Collectors.toList()
+                ));
+
+        List<Article> out = new ArrayList<>(totalCap);
+        for (Map.Entry<DigestCategory, Integer> e : SECTION_LIMITS.entrySet()) {
+            List<Article> bucket = byCat.getOrDefault(e.getKey(), List.of());
+            int take = Math.min(e.getValue(), bucket.size());
+            for (int i = 0; i < take && out.size() < totalCap; i++) {
+                out.add(bucket.get(i));
+            }
+            if (out.size() >= totalCap) break;
+        }
+        return out;
+    }
+
+    /**
+     * Build the single daily-aggregated inbox item: {@code content} holds the display
+     * title, {@code longText} holds the curated article list as a JSON array — the
+     * frontend parses and renders it as sectioned cards.
+     *
+     * @param articles curated, section-ordered list (capped to 16)
+     * @param totalFetched raw fetched count, used in the summary line for context
+     */
+    private static InboxItem toAggregateItem(List<Article> articles, int totalFetched, LocalDate today) {
         String articlesJson = articles.stream()
                 .map(DailyDigestService::articleToJson)
                 .collect(Collectors.joining(",", "[", "]"));
+
+        String summary = articles.isEmpty()
+                ? "今日无新文章"
+                : "精选 " + articles.size() + " 篇（抓取 " + totalFetched + " 篇）";
 
         return InboxItem.builder()
                 .content("今日 AI 摘要（" + today + "）")
                 .status(InboxItemStatus.TODO)
                 .type(InboxItemType.DIGEST)
-                .summary(articles.isEmpty() ? "今日无新文章" : "共 " + articles.size() + " 篇")
+                .summary(summary)
                 .longText(articlesJson)
                 .digestDate(today)
                 .build();

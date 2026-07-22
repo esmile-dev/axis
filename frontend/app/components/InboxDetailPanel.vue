@@ -105,6 +105,24 @@ const digestArticles = computed<DigestArticle[]>(() => {
     return []
   }
 })
+
+/** Group articles by section, in importance order. */
+const SECTIONS: { key: DigestCategory; label: string }[] = [
+  { key: 'AI_FRONTIER', label: 'AI 前沿' },
+  { key: 'TECH_INDUSTRY', label: '技术产业' },
+  { key: 'FINANCE_TECH', label: '财经科技' },
+  { key: 'OTHER', label: '其他简报' },
+]
+const digestSections = computed(() => {
+  const grouped = new Map<DigestCategory, DigestArticle[]>()
+  for (const a of digestArticles.value) {
+    if (!grouped.has(a.category)) grouped.set(a.category, [])
+    grouped.get(a.category)!.push(a)
+  }
+  return SECTIONS
+    .map(s => ({ ...s, articles: grouped.get(s.key) ?? [] }))
+    .filter(s => s.articles.length > 0)
+})
 </script>
 
 <template>
@@ -156,33 +174,39 @@ const digestArticles = computed<DigestArticle[]>(() => {
         <div v-if="digestArticles.length === 0" class="text-sm text-muted-foreground">
           今日无新文章
         </div>
-        <ul v-else class="space-y-3">
-          <li
-            v-for="(a, idx) in digestArticles"
-            :key="idx"
-            class="p-4 rounded-lg border border-border/40 bg-secondary/10 hover:bg-secondary/20 transition-colors"
-          >
-            <div class="flex items-center gap-2 mb-1.5">
-              <span class="text-[10px] px-1.5 py-px rounded border" :class="articleCategoryClasses[a.category]">
-                {{ articleCategoryLabel[a.category] ?? a.category }}
-              </span>
-              <span v-if="a.sourceName" class="text-[10px] text-muted-foreground">{{ a.sourceName }}</span>
-            </div>
-            <a
-              v-if="a.link"
-              :href="a.link"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-sm font-medium leading-snug hover:text-primary transition-colors"
-            >
-              {{ a.title }}
-            </a>
-            <h3 v-else class="text-sm font-medium leading-snug">{{ a.title }}</h3>
-            <p v-if="a.summary" class="text-xs text-muted-foreground mt-1.5 line-clamp-3">
-              {{ a.summary }}
-            </p>
-          </li>
-        </ul>
+        <div v-else class="space-y-6">
+          <section v-for="sec in digestSections" :key="sec.key">
+            <h2 class="flex items-center gap-2 text-sm font-semibold tracking-tight mb-3 sticky top-0 bg-background/95 backdrop-blur py-2 z-10">
+              <span class="w-1 h-4 rounded-sm" :class="articleCategoryClasses[sec.key].split(' ').find(c => c.startsWith('bg-'))"></span>
+              {{ sec.label }}
+              <span class="text-xs text-muted-foreground font-normal">（{{ sec.articles.length }}）</span>
+            </h2>
+            <ul class="space-y-2.5">
+              <li
+                v-for="(a, idx) in sec.articles"
+                :key="idx"
+                class="p-3.5 rounded-lg border border-border/40 bg-secondary/10 hover:bg-secondary/20 transition-colors"
+              >
+                <div class="flex items-center gap-2 mb-1">
+                  <span v-if="a.sourceName" class="text-[10px] text-muted-foreground">{{ a.sourceName }}</span>
+                </div>
+                <a
+                  v-if="a.link"
+                  :href="a.link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-sm font-medium leading-snug hover:text-primary transition-colors"
+                >
+                  {{ a.title }}
+                </a>
+                <h3 v-else class="text-sm font-medium leading-snug">{{ a.title }}</h3>
+                <p v-if="a.summary" class="text-xs text-muted-foreground mt-1 line-clamp-2">
+                  {{ a.summary }}
+                </p>
+              </li>
+            </ul>
+          </section>
+        </div>
       </template>
       <!-- NOTE：可编辑 textarea -->
       <textarea
