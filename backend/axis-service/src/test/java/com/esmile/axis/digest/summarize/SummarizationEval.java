@@ -1,5 +1,6 @@
 package com.esmile.axis.digest.summarize;
 
+import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.digest.classify.DigestCategory;
 import com.esmile.axis.digest.fetch.Article;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -62,11 +63,14 @@ class SummarizationEval {
         OpenAiChatModel chatModel = OpenAiChatModel.builder().options(opts).build();
         ChatClient chatClient = ChatClient.create(chatModel);
 
+        AiConfigService aiConfigService = Mockito.mock(AiConfigService.class);
+        Mockito.when(aiConfigService.get()).thenReturn(chatClient);
+
         ArticleSummaryCacheRepository cacheRepo = Mockito.mock(ArticleSummaryCacheRepository.class);
         when(cacheRepo.save(any(ArticleSummaryCache.class))).thenAnswer(i -> i.getArgument(0));
         when(cacheRepo.findByLink(any())).thenReturn(Optional.empty());
 
-        service = new SummarizationService(chatClient, cacheRepo);
+        service = new SummarizationService(aiConfigService, cacheRepo);
     }
 
     @Test

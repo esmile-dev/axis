@@ -1,12 +1,12 @@
 package com.esmile.axis.digest.summarize;
 
+import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.digest.classify.DigestCategory;
 import com.esmile.axis.digest.fetch.Article;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 
@@ -84,7 +84,7 @@ public class SummarizationService {
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
     private static final int MAX_RETRIES = 1;
 
-    private final ChatClient chatClient;
+    private final AiConfigService aiConfigService;
     private final ArticleSummaryCacheRepository cacheRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -171,7 +171,7 @@ public class SummarizationService {
     // ---------- internals ----------
 
     private String callLlm(String prompt) {
-        return chatClient.prompt()
+        return aiConfigService.get().prompt()
                 .user(prompt)
                 .options(OpenAiChatOptions.builder().timeout(TIMEOUT))
                 .call()

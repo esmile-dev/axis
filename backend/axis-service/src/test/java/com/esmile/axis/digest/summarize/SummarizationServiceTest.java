@@ -1,5 +1,6 @@
 package com.esmile.axis.digest.summarize;
 
+import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.digest.classify.DigestCategory;
 import com.esmile.axis.digest.fetch.Article;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +27,7 @@ import static org.mockito.Mockito.*;
 class SummarizationServiceTest {
 
     @Mock
-    private ChatClient chatClient;
+    private AiConfigService aiConfigService;
 
     @Mock
     private ArticleSummaryCacheRepository cacheRepository;
@@ -35,12 +36,14 @@ class SummarizationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SummarizationService(chatClient, cacheRepository);
+        service = new SummarizationService(aiConfigService, cacheRepository);
     }
 
     private ChatClient.ChatClientRequestSpec mockLlmResponse(String response) {
+        ChatClient chatClient = mock(ChatClient.class);
         ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
         ChatClient.CallResponseSpec resp = mock(ChatClient.CallResponseSpec.class);
+        when(aiConfigService.get()).thenReturn(chatClient);
         when(chatClient.prompt()).thenReturn(spec);
         when(spec.user(any(String.class))).thenReturn(spec);
         when(spec.options(any())).thenReturn(spec);
@@ -60,7 +63,7 @@ class SummarizationServiceTest {
 
         assertThat(s.headline()).isEqualTo("H");
         assertThat(s.tldr()).isEqualTo("T");
-        verify(chatClient, never()).prompt();
+        verify(aiConfigService, never()).get();
     }
 
     @Test
@@ -95,7 +98,9 @@ class SummarizationServiceTest {
     void summarize_llmThrows_returnsFallback() {
         Article article = article("u4", "Title", "desc");
         when(cacheRepository.findByLink("u4")).thenReturn(Optional.empty());
+        ChatClient chatClient = mock(ChatClient.class);
         ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
+        when(aiConfigService.get()).thenReturn(chatClient);
         when(chatClient.prompt()).thenReturn(spec);
         when(spec.user(any(String.class))).thenReturn(spec);
         when(spec.options(any())).thenReturn(spec);
@@ -125,7 +130,9 @@ class SummarizationServiceTest {
     void editor_llmFailure_returnsNull() {
         ArticleSummary s = new ArticleSummary("H", "T", "D", "W", "36氪", "u", DigestCategory.AI_FRONTIER);
         Map<DigestCategory, List<ArticleSummary>> sectioned = Map.of(DigestCategory.AI_FRONTIER, List.of(s));
+        ChatClient chatClient = mock(ChatClient.class);
         ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
+        when(aiConfigService.get()).thenReturn(chatClient);
         when(chatClient.prompt()).thenReturn(spec);
         when(spec.user(any(String.class))).thenReturn(spec);
         when(spec.options(any())).thenReturn(spec);
