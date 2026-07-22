@@ -22,13 +22,13 @@ erDiagram
         timestamp updated_at
     }
     ARTICLE_SUMMARY_CACHE {
-        string link PK "RSS link 唯一"
+        string link PK "RSS link 唯一（按 D4 仅 link 做缓存键）"
         text headline
         text tldr
         text detail
         text why_it_matters
-        string model "调用的模型名"
-        string prompt_version "精读 prompt hash"
+        string model "调用的模型名（仅记录，不参与缓存命中）"
+        string prompt_version "精读 prompt 全文 SHA-256（仅记录，不参与缓存命中）"
         timestamp created_at
     }
     INBOX_ITEM {
@@ -75,11 +75,12 @@ sequenceDiagram
             alt 成功
                 LLM-->>SS: JSON {headline, tldr, detail, why_it_matters, ...}
                 SS->>Cache: save(link, summary)
+                DDS->>DDS: llmCallCount++
             else 失败/超时
                 SS-->>DDS: fallback description+240 截断
+                DDS->>DDS: llmCallCount++
             end
         end
-        DDS->>DDS: llmCallCount++
     end
     alt 至少 1 篇精读成功
         DDS->>SS: editor编排(sectioned_summaries)
@@ -139,11 +140,13 @@ sequenceDiagram
 | 新文件 | `controller/ConfigController.java` | 4 个端点（GET/PUT/POST reload/POST test） |
 | 修改 | `service/DailyDigestService.java` | 注入 `SummarizationService` + `AiConfigService`；`curateBySection` 拆出 `curateBySectionGrouped`（返回 `Map<DigestCategory, List<Article>>` 保留顺序） |
 | 修改 | `store/DigestExecutionLog.java` | 加 `llmCallCount` 字段（NFR-003） |
-| 修改 | `config/AiConfig.java` | 删除 `chatClient` `@Bean`；chat agent 改为 `aiConfigService.get()` 获取 |
+| 修改 | `config/AiConfig.java`（axis-agent） | 删除 `chatClient` `@Bean`；保留 `chatMemory`；`AgentController` 改注入 `AiConfigService` 并调用 `.get()` |
 | 修改 | `pages/settings.vue` | 写 localStorage → 写后端；加测连按钮、来源显示、立即生效按钮 |
 | 新增 | `docs/feature/digest-2.0/evals/summarize-golden.jsonl` | 20 条真实文章 + 期望 JSON 输出 |
 | 新增 | `docs/feature/digest-2.0/evals/editor-judge.md` | 主编评测准则（人工/llm-judge 评分） |
-| 加密 | 新增 `AXIS_ENCRYPTION_PASSWORD` env var | NFR-002 加密密钥，部署文档需更新 |
+| 修改 | `axis-agent/AxisApplication.java` | 加 `@SpringBootApplication(exclude = OpenAiChatAutoConfiguration.class)`，避免 `axis-service` 引入 spring-ai 自动配置后产生重复 `ChatClient` bean |
+| 新增依赖 | `axis-service/pom.xml` | `spring-ai-starter-model-openai` + `spring-security-crypto` |
+| 加密 | 新增 `AXIS_ENCRYPTION_PASSWORD` 与 `AXIS_ENCRYPTION_SALT` env var | NFR-002 加密密钥，两者丢失会导致已加密 API key 不可恢复；部署文档需更新 |
 
 ## 6. AI 设计
 
@@ -169,7 +172,7 @@ sequenceDiagram
 }
 ```
 
-**`prompt_version` = SHA-256(prompt 文本前 200 字)**——prompt 改了自动失效缓存。
+**`prompt_version` = SHA-256(整个 prompt 文本)**——prompt 改一个字自动失效缓存；实际缓存命中仅按 `link`（D4 决策），model/prompt_version 仅作审计记录。
 
 ### 6.2 主编 prompt 模板（`prompt_editor`）
 
@@ -222,4 +225,4 @@ sequenceDiagram
 
 | 日期 | 变更内容 | 原因 |
 |------|----------|------|
-| 2026-07-22 | 初稿，覆盖 FR-001~004 + NFR-001~004 | design G2 |
+| 2026-07-22 | 设计变更：缓存键确定为单 `link` PK；`prompt_version` 改为全文 SHA-256 仅作记录；`axis-agent` 排除 `OpenAiChatAutoConfiguration` 以消除重复 ChatClient bean；新增 `AXIS_ENCRYPTION_SALT` 说明 | 用户确认三个关键决策（均选 A 方案） |
