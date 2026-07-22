@@ -44,6 +44,10 @@ public class InboxItem {
     @Column(columnDefinition = "TEXT")
     private String summary;
 
+    /** DIGEST：当日文章列表的 JSON（标题/一句话/链接/分类/信源/发布时间） */
+    @Column(columnDefinition = "TEXT")
+    private String longText;
+
     /** DIGEST：原文链接 */
     @Column(length = 512)
     private String link;

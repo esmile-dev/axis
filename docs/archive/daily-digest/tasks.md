@@ -48,3 +48,4 @@ created: 2026-07-21
 | 2026-07-21 | 执行顺序调整：T-003 提前于 T-002 执行 | T-002 要删 `DigestFileReader`，而 `DigestController` 引用它；先删端点解除编译依赖，任务内容不变 |
 | 2026-07-21 | G4 验收：所有 FR 通过；status 翻 verified | 后端集成验证通过 + 前端 build 通过 |
 | 2026-07-21 | 验收过程中暴露的踩坑：T-005 时 `ddl-auto: update` 加 `NOT NULL` 列但存量 2 行 → 报 `contains null values`；用 `@ColumnDefault('NOTE')` 让 Hibernate 写出 DEFAULT 子句回填存量行 | 已记录到 summary 踩坑栏 |
+| 2026-07-22 | 增补任务 T-011/T-012：digest 聚合为 1 条/天，详情嵌多篇 | 用户实装后反馈偏离，原 G2 design 不重走，按 §3 铁律 2 在变更记录注明后继续 |

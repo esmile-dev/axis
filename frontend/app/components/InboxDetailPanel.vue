@@ -5,12 +5,22 @@ import { Button } from '@/components/ui/button'
 type DigestCategory = 'AI_FRONTIER' | 'TECH_INDUSTRY' | 'FINANCE_TECH' | 'OTHER'
 type ItemType = 'NOTE' | 'DIGEST'
 
+interface DigestArticle {
+  title: string
+  summary: string
+  link: string
+  sourceName: string
+  category: DigestCategory
+  publishedAt: string
+}
+
 interface InboxItem {
   id: string
   content: string
   status: 'TODO' | 'DONE'
   type?: ItemType
   summary?: string | null
+  longText?: string | null
   link?: string | null
   sourceName?: string | null
   category?: DigestCategory | null
@@ -75,6 +85,26 @@ const categoryLabel = computed(() => {
   }
   return map[props.item.category] ?? props.item.category
 })
+
+const articleCategoryLabel: Record<string, string> = {
+  AI_FRONTIER: 'AI', TECH_INDUSTRY: 'Tech', FINANCE_TECH: '财经', OTHER: '其它'
+}
+const articleCategoryClasses: Record<string, string> = {
+  AI_FRONTIER: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+  TECH_INDUSTRY: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  FINANCE_TECH: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  OTHER: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
+}
+
+const digestArticles = computed<DigestArticle[]>(() => {
+  if (!props.item?.longText) return []
+  try {
+    const parsed = JSON.parse(props.item.longText)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+})
 </script>
 
 <template>
@@ -111,34 +141,48 @@ const categoryLabel = computed(() => {
 
     <!-- Content -->
     <div class="flex-1 p-6 overflow-auto">
-      <!-- DIGEST：标题 + 摘要 + 原文链接（只读） -->
+      <!-- DIGEST 聚合：标题 + 文章列表（每篇一张卡片） -->
       <template v-if="isDigest">
         <div class="flex items-center gap-2 mb-3">
           <span class="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
             <Newspaper class="w-3 h-3" />
             Daily Digest
           </span>
-          <span v-if="categoryLabel" class="text-xs px-2 py-0.5 rounded-md bg-secondary/30 text-muted-foreground">
-            {{ categoryLabel }}
-          </span>
-          <span v-if="item.sourceName" class="text-xs text-muted-foreground">
-            · {{ item.sourceName }}
+          <span v-if="item.summary" class="text-xs text-muted-foreground">
+            {{ item.summary }}
           </span>
         </div>
-        <h1 class="text-2xl font-semibold leading-snug mb-4">{{ item.content }}</h1>
-        <p v-if="item.summary" class="text-base text-muted-foreground leading-relaxed mb-6 whitespace-pre-line">
-          {{ item.summary }}
-        </p>
-        <a
-          v-if="item.link"
-          :href="item.link"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-        >
-          <ExternalLink class="w-4 h-4" />
-          阅读原文
-        </a>
+        <h1 class="text-2xl font-semibold leading-snug mb-5">{{ item.content }}</h1>
+        <div v-if="digestArticles.length === 0" class="text-sm text-muted-foreground">
+          今日无新文章
+        </div>
+        <ul v-else class="space-y-3">
+          <li
+            v-for="(a, idx) in digestArticles"
+            :key="idx"
+            class="p-4 rounded-lg border border-border/40 bg-secondary/10 hover:bg-secondary/20 transition-colors"
+          >
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="text-[10px] px-1.5 py-px rounded border" :class="articleCategoryClasses[a.category]">
+                {{ articleCategoryLabel[a.category] ?? a.category }}
+              </span>
+              <span v-if="a.sourceName" class="text-[10px] text-muted-foreground">{{ a.sourceName }}</span>
+            </div>
+            <a
+              v-if="a.link"
+              :href="a.link"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-sm font-medium leading-snug hover:text-primary transition-colors"
+            >
+              {{ a.title }}
+            </a>
+            <h3 v-else class="text-sm font-medium leading-snug">{{ a.title }}</h3>
+            <p v-if="a.summary" class="text-xs text-muted-foreground mt-1.5 line-clamp-3">
+              {{ a.summary }}
+            </p>
+          </li>
+        </ul>
       </template>
       <!-- NOTE：可编辑 textarea -->
       <textarea

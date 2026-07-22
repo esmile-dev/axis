@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Orchestrates the daily-digest pipeline:
@@ -103,17 +104,17 @@ public class DailyDigestService {
             return DigestResult.skipped(existingCount);
         }
 
-        // 3. Fetch, classify, persist as inbox items.
+        // 3. Fetch, classify, persist as a single aggregated inbox item per day.
         int articleCount = 0;
         try {
             List<Article> raw = fetcherService.fetchAll();
-            List<InboxItem> items = raw.stream()
+            List<Article> classified = raw.stream()
                     .map(a -> a.withCategory(classifier.classify(a)))
-                    .map(a -> toInboxItem(a, today))
                     .toList();
-            inboxItemRepository.saveAll(items);
+            InboxItem item = toAggregateItem(classified, today);
+            inboxItemRepository.save(item);
 
-            articleCount = items.size();
+            articleCount = classified.size();
             logRow.setStatus(DigestExecutionStatus.COMPLETED);
             logRow.setArticleCount(articleCount);
             repository.save(logRow);
@@ -127,18 +128,56 @@ public class DailyDigestService {
         }
     }
 
-    /** Map a classified article to an unread DIGEST inbox item (title goes to {@code content}). */
-    private static InboxItem toInboxItem(Article a, LocalDate today) {
+    /**
+     * Build the single daily-aggregated inbox item: {@code content} holds the display
+     * title, {@code longText} holds the article list as a JSON array — the frontend
+     * parses and renders it as the multi-card detail view.
+     */
+    private static InboxItem toAggregateItem(List<Article> articles, LocalDate today) {
+        String articlesJson = articles.stream()
+                .map(DailyDigestService::articleToJson)
+                .collect(Collectors.joining(",", "[", "]"));
+
         return InboxItem.builder()
-                .content(a.title())
+                .content("今日 AI 摘要（" + today + "）")
                 .status(InboxItemStatus.TODO)
                 .type(InboxItemType.DIGEST)
-                .summary(a.summary())
-                .link(a.link())
-                .sourceName(a.sourceName())
-                .category(a.category())
-                .publishedAt(a.publishedAt())
+                .summary(articles.isEmpty() ? "今日无新文章" : "共 " + articles.size() + " 篇")
+                .longText(articlesJson)
                 .digestDate(today)
                 .build();
+    }
+
+    /** Hand-rolled JSON for one article — avoids pulling Jackson into axis-service. */
+    private static String articleToJson(Article a) {
+        return "{"
+                + "\"title\":" + json(a.title()) + ","
+                + "\"summary\":" + json(a.summary() == null ? "" : a.summary()) + ","
+                + "\"link\":" + json(a.link() == null ? "" : a.link()) + ","
+                + "\"sourceName\":" + json(a.sourceName() == null ? "" : a.sourceName()) + ","
+                + "\"category\":" + json(a.category().name()) + ","
+                + "\"publishedAt\":" + json(a.publishedAt() == null ? "" : a.publishedAt().toString())
+                + "}";
+    }
+
+    private static String json(String s) {
+        StringBuilder sb = new StringBuilder(s.length() + 2);
+        sb.append('"');
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (c < 0x20) sb.append(String.format("\\u%04x", (int) c));
+                    else sb.append(c);
+                }
+            }
+        }
+        sb.append('"');
+        return sb.toString();
     }
 }
