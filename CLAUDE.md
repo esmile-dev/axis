@@ -45,7 +45,7 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个后端测试
 - 流式 SSE 端点（`/api/agent/chat`、`/api/agent/expand`）直接用 `fetch + ReadableStream`，绕过 `$fetch`
 
 ### Daily Digest（每日技术摘要）
-跨模块功能：逻辑在 `axis-service` 的 `com.axis.digest`（RSS 抓取 → 关键词分类 → 写 `inbox_item`，`type=DIGEST`、`readAt=null`，重跑时按 `digest_date` 删旧条目），REST 入口在 `axis-agent` 的 `/api/v1/digest/trigger`（手动触发，幂等）。Scheduler 按 cron 每天 10/12/14/20/22 点触发；Inbox 页面头部「生成今日摘要」按钮触发手动执行；点击 digest 条目即标记已读（PATCH `read:true`）。需求/设计/任务文档见 `docs/feature/daily-digest/`。
+跨模块功能：逻辑在 `axis-service` 的 `com.esmile.axis.digest`（RSS 抓取 → 关键词分类 → 写 `inbox_item`，`type=DIGEST`、`readAt=null`，重跑时按 `digest_date` 删旧条目），REST 入口在 `axis-agent` 的 `/api/v1/digest/trigger`（手动触发，幂等）。Scheduler 按 cron 每天 10/12/14/20/22 点触发；Inbox 页面头部「生成今日摘要」按钮触发手动执行；点击 digest 条目即标记已读（PATCH `read:true`）。需求/设计/任务文档见 `docs/feature/daily-digest/`。
 
 ## Key Structure
 
@@ -79,8 +79,8 @@ backend/
 │       ├── digest/          # Daily Digest：fetch/classify/scheduler
 │       └── config/          # CORS 配置
 └── axis-agent/              # AI Agent 模块（依赖 axis-service，产出可执行 fat jar）
-    └── src/main/java/com/axis/
-        ├── AxisApplication.java  # Spring Boot 主类（扫描整个 com.axis）
+    └── src/main/java/com/esmile/axis/
+        ├── AxisApplication.java  # Spring Boot 主类（扫描整个 com.esmile.axis）
         ├── config/AiConfig.java  # ChatClient / ChatMemory 配置
         ├── digest/controller/    # /api/v1/digest REST 入口
         └── ai/              # Spring AI Agent（controller/tool，Tools: Inbox/Issue/Project/Knowledge）

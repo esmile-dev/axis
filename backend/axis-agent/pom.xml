@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.axis</groupId>
+        <groupId>com.esmile</groupId>
         <artifactId>axis-backend</artifactId>
         <version>0.1.0</version>
     </parent>
@@ -16,7 +16,7 @@
     <dependencies>
         <!-- Business core -->
         <dependency>
-            <groupId>com.axis</groupId>
+            <groupId>com.esmile</groupId>
             <artifactId>axis-service</artifactId>
             <version>${project.version}</version>
         </dependency>

@@ -10,7 +10,7 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
-    <groupId>com.axis</groupId>
+    <groupId>com.esmile</groupId>
     <artifactId>axis-backend</artifactId>
     <version>0.1.0</version>
     <packaging>pom</packaging>
