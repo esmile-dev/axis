@@ -76,4 +76,16 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <testResource>
+                <directory>${project.basedir}/../../docs/feature/digest-2.0/evals</directory>
+                <targetPath>evals</targetPath>
+            </testResource>
+        </testResources>
+    </build>
 </project>
