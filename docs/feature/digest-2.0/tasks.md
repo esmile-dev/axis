@@ -17,7 +17,7 @@ created: 2026-07-22
 | ✓ | 编号 | 任务内容 | 对应 FR | 验收点（怎么算完成） | Commit |
 |---|------|----------|---------|----------------------|--------|
 | ☑ | T-001 | 新增 2 个 JPA 实体 + repository：`AppConfig`、`ArticleSummaryCache`；`DigestExecutionLog.llmCallCount` 字段 | FR-001/002、NFR-003 | `mvn -pl axis-service compile` 过；`psql \dt` 看到 2 张新表；`\d digest_execution_log` 看到 `llm_call_count` 字段 | ca4f5bb |
-| ☐ | T-002 | 实现 `AiConfigService`：启动 `@PostConstruct` 加载（DB 优先→env 兜底）；`Encryptors.delux` 加密 API key；`volatile ChatClient currentClient`；`reload()` 原子替换；`get()` 返回当前实例 | FR-001、NFR-002 | 单测覆盖：DB 有→用 DB；DB 空→用 env；reload 后 `get()` 返回新实例；DB dump 不可见明文 key | |
+| ☑ | T-002 | 实现 `AiConfigService`：启动 `@PostConstruct` 加载（DB 优先→env 兜底）；`Encryptors.delux` 加密 API key；`volatile ChatClient currentClient`；`reload()` 原子替换；`get()` 返回当前实例 | FR-001、NFR-002 | 单测覆盖：DB 有→用 DB；DB 空→用 env；reload 后 `get()` 返回新实例；DB dump 不可见明文 key | a74e689 |
 | ☐ | T-003 | 实现 `ConfigController` 4 端点（GET/PUT/POST reload/POST test，`/api/v1/config/ai*`），API key 出入均加掩码 | FR-001/004 | curl 4 个端点全部 200；GET 返回 apiKey=`***`；test 端点用错误 key 返回失败 JSON | |
 | ☐ | T-004 | 重构 `AiConfig.java`：删除 `chatClient` `@Bean`；chat agent 改为注入 `AiConfigService.get()` | FR-001 | `mvn compile` 过；`/api/agent/chat` 端到端通（用真实 key） | |
 | ☐ | T-005 | 实现 `SummarizationService`：`summarize(article)` 精读（30s timeout + JSON 解析失败重试 1 次）；`editor(sectionedArticles)` 主编；按 `link+model+prompt_version` 读/写 `ArticleSummaryCache` | FR-002/003、NFR-001 | 单测：mock ChatClient 成功/超时/坏 JSON 三场景；超时回退到 description | |
