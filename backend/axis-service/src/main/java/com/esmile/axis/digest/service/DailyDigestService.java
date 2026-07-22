@@ -4,6 +4,10 @@ import com.esmile.axis.digest.classify.Classifier;
 import com.esmile.axis.digest.classify.DigestCategory;
 import com.esmile.axis.digest.fetch.Article;
 import com.esmile.axis.digest.fetch.RssFetcherService;
+import com.esmile.axis.digest.summarize.ArticleSummary;
+import com.esmile.axis.digest.summarize.ArticleSummaryCache;
+import com.esmile.axis.digest.summarize.ArticleSummaryCacheRepository;
+import com.esmile.axis.digest.summarize.SummarizationService;
 import com.esmile.axis.digest.store.DigestExecutionLog;
 import com.esmile.axis.digest.store.DigestExecutionLogRepository;
 import com.esmile.axis.digest.store.DigestExecutionStatus;
@@ -30,13 +34,12 @@ import java.util.stream.Collectors;
 /**
  * Orchestrates the daily-digest pipeline:
  * <pre>
- *   idempotency check → parallel fetch → classify → write inbox items → log
+ *   idempotency check → parallel fetch → classify → LLM summarize/editor → write inbox item → log
  * </pre>
  *
- * <p>Articles are persisted as {@code inbox_item} rows ({@code type=DIGEST}),
- * surfaced in the Inbox page. Only a {@code COMPLETED} log row blocks re-runs;
- * a {@code PENDING}/{@code FAILED} row (previous crash or failure) is retried —
- * stale digest items for the day are removed first so retries stay idempotent.
+ * <p>Digest 2.0 adds LLM fine-read + editor-in-chief passes over the curated articles.
+ * Failures at any LLM step fall back to the keyword-classified version so the inbox
+ * never ends up empty because of a provider issue.
  *
  * <p>Returns a {@link DigestResult} suitable for direct JSON serialization
  * by {@code DigestController}.
@@ -49,6 +52,7 @@ public class DailyDigestService {
     /** Section caps, ordered by importance: AI > Tech > Finance > Other. */
     private static final Map<DigestCategory, Integer> SECTION_LIMITS =
             new EnumMap<>(DigestCategory.class);
+
     static {
         SECTION_LIMITS.put(DigestCategory.AI_FRONTIER, 5);
         SECTION_LIMITS.put(DigestCategory.TECH_INDUSTRY, 5);
@@ -60,15 +64,19 @@ public class DailyDigestService {
     private final InboxItemRepository inboxItemRepository;
     private final RssFetcherService fetcherService;
     private final Classifier classifier;
+    private final SummarizationService summarizationService;
+    private final ArticleSummaryCacheRepository cacheRepository;
 
     /** Outcome returned to API callers and the scheduler. */
     public record DigestResult(boolean executed, String message, int articleCount) {
         public static DigestResult skipped(int existingArticleCount) {
             return new DigestResult(false, "Today's digest already generated", existingArticleCount);
         }
+
         public static DigestResult completed(int count) {
             return new DigestResult(true, "Digest generated successfully", count);
         }
+
         public static DigestResult failed(int count, String reason) {
             return new DigestResult(false, "Digest generation failed: " + reason, count);
         }
@@ -109,6 +117,7 @@ public class DailyDigestService {
         inboxItemRepository.deleteByTypeAndDigestDate(InboxItemType.DIGEST, today);
         logRow.setStatus(DigestExecutionStatus.PENDING);
         logRow.setArticleCount(0);
+        logRow.setLlmCallCount(0);
         try {
             repository.saveAndFlush(logRow);
         } catch (DataIntegrityViolationException e) {
@@ -120,28 +129,59 @@ public class DailyDigestService {
             return DigestResult.skipped(existingCount);
         }
 
-        // 3. Fetch, classify, persist as a single aggregated inbox item per day.
+        // 3. Fetch, classify, curate, summarize, editor, persist.
         int articleCount = 0;
+        int llmCallCount = 0;
+        boolean aiGenerated = false;
         try {
             List<Article> raw = fetcherService.fetchAll();
             List<Article> classified = raw.stream()
                     .map(a -> a.withCategory(classifier.classify(a)))
                     .toList();
-            // Cap per section (by importance) and cap overall; section order
-            // is preserved by the SECTION_LIMITS EnumMap iteration order.
-            List<Article> curated = curateBySection(classified, 16);
-            InboxItem item = toAggregateItem(curated, classified.size(), today);
+            Map<DigestCategory, List<Article>> grouped = curateBySectionGrouped(classified, 16);
+            List<Article> curated = flattenGrouped(grouped);
+
+            // Summarize each article with cache-first logic.
+            List<ArticleSummary> summaries = new ArrayList<>(curated.size());
+            for (Article article : curated) {
+                Optional<ArticleSummaryCache> cached = cacheRepository.findByLink(article.link());
+                if (cached.isPresent()) {
+                    summaries.add(fromCache(article, cached.get()));
+                } else {
+                    summaries.add(summarizationService.summarize(article));
+                    llmCallCount++;
+                }
+            }
+
+            // Editor-in-chief pass (1 additional LLM call on success).
+            Map<DigestCategory, List<ArticleSummary>> summaryGrouped = summaries.stream()
+                    .collect(Collectors.groupingBy(
+                            ArticleSummary::category,
+                            () -> new EnumMap<>(DigestCategory.class),
+                            Collectors.toList()
+                    ));
+            SummarizationService.EditorOutput editorOutput = summarizationService.editor(summaryGrouped);
+            if (editorOutput != null) {
+                llmCallCount++;
+                aiGenerated = true;
+            }
+
+            InboxItem item = toAggregateItem(curated, summaries, editorOutput, classified.size(), today, aiGenerated);
             inboxItemRepository.save(item);
 
             articleCount = curated.size();
             logRow.setStatus(DigestExecutionStatus.COMPLETED);
             logRow.setArticleCount(articleCount);
+            logRow.setLlmCallCount(llmCallCount);
             repository.save(logRow);
+
+            log.info("Digest completed for {}: articles={} llmCalls={} aiGenerated={}", today, articleCount, llmCallCount, aiGenerated);
             return DigestResult.completed(articleCount);
         } catch (RuntimeException e) {
             log.error("Digest failed for {}: {}", today, e.toString(), e);
             logRow.setStatus(DigestExecutionStatus.FAILED);
             logRow.setArticleCount(articleCount);
+            logRow.setLlmCallCount(llmCallCount);
             repository.save(logRow);
             return DigestResult.failed(articleCount, e.getMessage());
         }
@@ -149,11 +189,11 @@ public class DailyDigestService {
 
     /**
      * Group classified articles by category, take the configured cap per section
-     * (in importance order), and stop at {@code totalCap}. Articles within a
-     * section are sorted by {@code publishedAt DESC} (newest first); articles
-     * with no {@code publishedAt} are pushed to the end.
+     * (in importance order), and stop at {@code totalCap}. Returns the grouped map
+     * preserving section order; articles within a section are sorted by
+     * {@code publishedAt DESC}.
      */
-    private static List<Article> curateBySection(List<Article> classified, int totalCap) {
+    private static Map<DigestCategory, List<Article>> curateBySectionGrouped(List<Article> classified, int totalCap) {
         Map<DigestCategory, List<Article>> byCat = classified.stream()
                 .sorted(Comparator.comparing(
                         (Article a) -> a.publishedAt() == null ? Instant.MIN : a.publishedAt()
@@ -164,46 +204,73 @@ public class DailyDigestService {
                         Collectors.toList()
                 ));
 
-        List<Article> out = new ArrayList<>(totalCap);
+        Map<DigestCategory, List<Article>> out = new EnumMap<>(DigestCategory.class);
         for (Map.Entry<DigestCategory, Integer> e : SECTION_LIMITS.entrySet()) {
             List<Article> bucket = byCat.getOrDefault(e.getKey(), List.of());
             int take = Math.min(e.getValue(), bucket.size());
-            for (int i = 0; i < take && out.size() < totalCap; i++) {
-                out.add(bucket.get(i));
+            List<Article> taken = take == bucket.size() ? bucket : bucket.subList(0, take);
+            out.put(e.getKey(), taken);
+            if (out.values().stream().mapToInt(List::size).sum() >= totalCap) {
+                break;
             }
-            if (out.size() >= totalCap) break;
         }
         return out;
     }
 
-    /**
-     * Build the single daily-aggregated inbox item: {@code content} holds the display
-     * title, {@code longText} holds the curated article list as a JSON array — the
-     * frontend parses and renders it as sectioned cards.
-     *
-     * @param articles curated, section-ordered list (capped to 16)
-     * @param totalFetched raw fetched count, used in the summary line for context
-     */
-    private static InboxItem toAggregateItem(List<Article> articles, int totalFetched, LocalDate today) {
-        String articlesJson = articles.stream()
-                .map(DailyDigestService::articleToJson)
-                .collect(Collectors.joining(",", "[", "]"));
+    private static List<Article> flattenGrouped(Map<DigestCategory, List<Article>> grouped) {
+        List<Article> out = new ArrayList<>(16);
+        for (Map.Entry<DigestCategory, Integer> e : SECTION_LIMITS.entrySet()) {
+            List<Article> bucket = grouped.getOrDefault(e.getKey(), List.of());
+            out.addAll(bucket);
+        }
+        return out;
+    }
 
-        String summary = articles.isEmpty()
-                ? "今日无新文章"
-                : "精选 " + articles.size() + " 篇（抓取 " + totalFetched + " 篇）";
+    private static ArticleSummary fromCache(Article article, ArticleSummaryCache c) {
+        return new ArticleSummary(c.getHeadline(), c.getTldr(), c.getDetail(), c.getWhyItMatters(),
+                article.sourceName(), article.link(), article.category());
+    }
+
+    /**
+     * Build the single daily-aggregated inbox item.
+     *
+     * <p>If the editor pass succeeded, {@code longText} is an extended article array
+     * containing LLM fields ({@code headline}, {@code tldr}, {@code detail},
+     * {@code why_it_matters}) plus a machine-readable {@code aiGenerated} marker in
+     * the first article object. If the editor failed, it falls back to the original
+     * keyword-classified JSON array and adds a降级标记 to {@code summary}.
+     */
+    private static InboxItem toAggregateItem(List<Article> articles,
+                                             List<ArticleSummary> summaries,
+                                             SummarizationService.EditorOutput editorOutput,
+                                             int totalFetched,
+                                             LocalDate today,
+                                             boolean aiGenerated) {
+        String longText;
+        String summary;
+        if (aiGenerated && editorOutput != null) {
+            longText = summaries.stream()
+                    .map(s -> summaryToJson(s, true))
+                    .collect(Collectors.joining(",", "[", "]"));
+            summary = "精选 " + articles.size() + " 篇（抓取 " + totalFetched + " 篇）— AI 摘要";
+        } else {
+            longText = articles.stream()
+                    .map(DailyDigestService::articleToJson)
+                    .collect(Collectors.joining(",", "[", "]"));
+            summary = "精选 " + articles.size() + " 篇（抓取 " + totalFetched + " 篇）— AI 摘要暂不可用，已降级";
+        }
 
         return InboxItem.builder()
                 .content("今日 AI 摘要（" + today + "）")
                 .status(InboxItemStatus.TODO)
                 .type(InboxItemType.DIGEST)
                 .summary(summary)
-                .longText(articlesJson)
+                .longText(longText)
                 .digestDate(today)
                 .build();
     }
 
-    /** Hand-rolled JSON for one article — avoids pulling Jackson into axis-service. */
+    /** Hand-rolled JSON for one article — keeps the frontend-compatible shape. */
     private static String articleToJson(Article a) {
         return "{"
                 + "\"title\":" + json(a.title()) + ","
@@ -215,11 +282,30 @@ public class DailyDigestService {
                 + "}";
     }
 
+    /** Extended JSON that adds LLM fields while keeping the frontend-compatible base shape. */
+    private static String summaryToJson(ArticleSummary s, boolean markAiGenerated) {
+        String marker = markAiGenerated ? "\"aiGenerated\":true," : "";
+        return "{"
+                + marker
+                + "\"title\":" + json(s.headline()) + ","
+                + "\"headline\":" + json(s.headline()) + ","
+                + "\"tldr\":" + json(s.tldr()) + ","
+                + "\"detail\":" + json(s.detail()) + ","
+                + "\"why_it_matters\":" + json(s.whyItMatters()) + ","
+                + "\"summary\":" + json(s.tldr()) + ","
+                + "\"link\":" + json(s.url() == null ? "" : s.url()) + ","
+                + "\"sourceName\":" + json(s.source() == null ? "" : s.source()) + ","
+                + "\"category\":" + json(s.category().name()) + ","
+                + "\"publishedAt\":" + json("")
+                + "}";
+    }
+
     private static String json(String s) {
-        StringBuilder sb = new StringBuilder(s.length() + 2);
+        String safe = s == null ? "" : s;
+        StringBuilder sb = new StringBuilder(safe.length() + 2);
         sb.append('"');
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
+        for (int i = 0; i < safe.length(); i++) {
+            char c = safe.charAt(i);
             switch (c) {
                 case '"' -> sb.append("\\\"");
                 case '\\' -> sb.append("\\\\");
