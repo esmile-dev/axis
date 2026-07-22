@@ -25,7 +25,7 @@ created: 2026-07-22
 | ☑ | T-007 | 改造 `settings.vue`：写后端（`$fetch` PUT）；测连按钮（POST test）；来源显示（GET 返回 source 字段）；立即生效按钮（POST reload） | FR-001/004 | UI 填值→保存→刷新仍在；点击测连→toast 反馈；切到错误 key→点立即生效→下次 digest 走降级 | 3731277 |
 | ☑ | T-008 | 新增 `docs/feature/digest-2.0/evals/summarize-golden.jsonl`（20 条真实 RSS）；新增 `evals/editor-judge.md`（5 分制评分准则） | FR-002/003、NFR-004 | 文件存在；20 条可解析；judge.md 含明确评分维度 | 6d0f7ad |
 | ☑ | T-009 | 新增 `src/test/java/.../digest/summarize/SummarizationEval.java`：跑 20 条 golden case，断言字段填充率 100% + `why_it_matters` 长度 [20,100] 合格率 ≥ 85% + `headline` 长度 [5,20] 合格率 ≥ 90% | NFR-004 | `mvn test -pl axis-service -Dtest=SummarizationEval` 全绿（有 AI_API_KEY 时） | 61b9d38 |
-| ☐ | T-010 | 端到端验证：起后端 + 触发 digest + 看 Inbox + 验证 `llmCallCount` + 手动走一次降级路径；写 `summary.md` 复盘 | 全部 | Inbox 出现新条目含 `why_it_matters`；配错 key 走降级；10 个 commit | |
+| ☑ | T-010 | 端到端验证：起后端 + 触发 digest + 看 Inbox + 验证 `llmCallCount` + 手动走一次降级路径；写 `summary.md` 复盘 | 全部 | Inbox 出现新条目含 `why_it_matters`；配错 key 走降级；`llmCallCount=14`；`summary.md` 完成 | acded9a |
 
 ## 验收记录（实现完成后填写，G4 用）
 
