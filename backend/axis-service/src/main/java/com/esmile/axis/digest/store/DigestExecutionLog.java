@@ -43,6 +43,11 @@ public class DigestExecutionLog {
     @Builder.Default
     private int articleCount = 0;
 
+    /** Digest 2.0: actual LLM calls made (cache hits excluded). NFR-003 budget ≤ 17. */
+    @Column(name = "llm_call_count", nullable = false)
+    @Builder.Default
+    private int llmCallCount = 0;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
