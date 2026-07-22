@@ -57,6 +57,18 @@
             <version>2.1.0</version>
         </dependency>
 
+        <!-- Spring AI OpenAI (Digest 2.0: AiConfigService + SummarizationService) -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency>
+
+        <!-- Spring Security Crypto (Digest 2.0: AES encryption for API keys) -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
