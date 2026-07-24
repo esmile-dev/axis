@@ -1,6 +1,8 @@
 package com.esmile.axis.config;
 
+import com.esmile.axis.entity.AiConfigProfile;
 import com.esmile.axis.entity.AppConfig;
+import com.esmile.axis.repository.AiConfigProfileRepository;
 import com.esmile.axis.repository.AppConfigRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -12,32 +14,35 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.encrypt.Encryptors;
 import org.springframework.security.crypto.encrypt.TextEncryptor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
- * Manages the AI provider configuration for the whole app — both
- * Daily Digest summarization (Digest 2.0) and the chat agent share
- * the same {@link ChatClient} instance returned by {@link #get()}.
+ * Manages multiple AI provider profiles. Only one profile is active at a time;
+ * the active profile builds the global {@link ChatClient} used by both Daily
+ * Digest and the chat agent.
  *
- * <p><b>Resolution order at startup</b>: DB ({@code app_config} table)
- * → env vars ({@code AI_API_KEY}/{@code AI_BASE_URL}/{@code AI_MODEL}).
- * The DB is the source of truth once written; env vars are the dev
- * fallback. {@link #reload()} swaps the active {@code ChatClient}
- * atomically so other threads never see a half-constructed client.
+ * <p><b>Startup order</b>: active DB profile → legacy {@code app_config}
+ * migration → env vars fallback. Legacy flat keys ({@code ai.api_key} /
+ * {@code ai.endpoint} / {@code ai.model}) from Digest 2.0 are migrated into a
+ * single active profile on first boot.
  *
- * <p><b>Encryption</b>: API keys are AES-256 encrypted before being
- * written to the DB. The encryption password comes from
- * {@code AXIS_ENCRYPTION_PASSWORD} and the salt from
- * {@code AXIS_ENCRYPTION_SALT} (must be hex). Losing either env var
- * makes existing encrypted keys unrecoverable.
+ * <p>{@link #reload()} swaps the active {@code ChatClient} atomically so other
+ * threads never see a half-constructed client.
+ *
+ * <p>API keys are AES-256 encrypted at rest. The encryption password/salt come
+ * from {@code AXIS_ENCRYPTION_PASSWORD} and {@code AXIS_ENCRYPTION_SALT}.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiConfigService {
 
-    private final AppConfigRepository repository;
+    private final AiConfigProfileRepository profileRepository;
+    private final AppConfigRepository legacyConfigRepository;
 
     @Value("${AXIS_ENCRYPTION_PASSWORD:dev-only-do-not-use-in-prod}")
     private String encryptionPassword;
@@ -57,8 +62,8 @@ public class AiConfigService {
     private volatile ChatClient currentClient;
     private volatile ResolvedConfig currentConfig;
 
-    /** Effective AI config — {@code source} is "db" or "env" for the settings UI. */
-    public record ResolvedConfig(String apiKey, String endpoint, String model, String source) {
+    /** Effective AI config — {@code source} is "db" or "env". */
+    public record ResolvedConfig(String id, String name, String apiKey, String endpoint, String model, String source) {
         public String maskedApiKey() {
             if (apiKey == null || apiKey.length() < 8) return "***";
             return apiKey.substring(0, 4) + "***" + apiKey.substring(apiKey.length() - 4);
@@ -72,13 +77,13 @@ public class AiConfigService {
             cfg = loadFromEnv();
             log.info("AI config loaded from env vars (model={}, endpoint={})", cfg.model(), cfg.endpoint());
         } else {
-            log.info("AI config loaded from DB (model={}, endpoint={})", cfg.model(), cfg.endpoint());
+            log.info("AI config loaded from DB profile {} (model={}, endpoint={})", cfg.id(), cfg.model(), cfg.endpoint());
         }
         this.currentConfig = cfg;
         this.currentClient = buildClient(cfg);
     }
 
-    /** Rebuild the ChatClient from current DB/env config. Safe to call concurrently. */
+    /** Rebuild the ChatClient from the active DB profile or env config. */
     public synchronized void reload() {
         log.info("Reloading AI config");
         load();
@@ -94,29 +99,181 @@ public class AiConfigService {
         return currentConfig;
     }
 
-    /**
-     * Persist user-supplied config. Encrypts the apiKey before writing.
-     * Reloads on success. Throws if encryption is misconfigured.
-     */
-    public synchronized void save(String apiKey, String endpoint, String model) {
-        TextEncryptor enc = encryptor();
-        repository.save(AppConfig.builder()
-                .key("ai.api_key").value(enc.encrypt(apiKey)).encrypted(true).build());
-        repository.save(AppConfig.builder()
-                .key("ai.endpoint").value(endpoint).encrypted(false).build());
-        repository.save(AppConfig.builder()
-                .key("ai.model").value(model).encrypted(false).build());
-        log.info("AI config saved to DB (model={}, endpoint={})", model, endpoint);
-        reload();
+    // ---------- profile management ----------
+
+    public List<AiConfigProfile> listProfiles() {
+        return profileRepository.findAllByOrderByCreatedAtAsc();
     }
 
-    /**
-     * Test the current config with a trivial LLM call. Returns null on success,
-     * or an error message on failure. Uses the active client (post any pending reload).
-     */
+    public Optional<AiConfigProfile> findProfile(String id) {
+        return profileRepository.findById(id);
+    }
+
+    @Transactional
+    public AiConfigProfile createProfile(String name, String apiKey, String endpoint, String model) {
+        boolean first = profileRepository.count() == 0;
+        AiConfigProfile profile = AiConfigProfile.builder()
+                .id(UUID.randomUUID().toString())
+                .name(name)
+                .apiKey(encrypt(apiKey))
+                .endpoint(endpoint)
+                .model(model)
+                .active(first) // first profile becomes active automatically
+                .build();
+        AiConfigProfile saved = profileRepository.save(profile);
+        if (first) {
+            reload();
+        }
+        log.info("AI profile created (id={}, name={})", saved.getId(), saved.getName());
+        return saved;
+    }
+
+    @Transactional
+    public AiConfigProfile updateProfile(String id, String name, String apiKey, String endpoint, String model) {
+        AiConfigProfile profile = profileRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found: " + id));
+        profile.setName(name);
+        if (apiKey != null && !apiKey.isBlank()) {
+            profile.setApiKey(encrypt(apiKey));
+        }
+        profile.setEndpoint(endpoint);
+        profile.setModel(model);
+        AiConfigProfile saved = profileRepository.save(profile);
+        if (profile.isActive()) {
+            reload();
+        }
+        log.info("AI profile updated (id={}, name={})", saved.getId(), saved.getName());
+        return saved;
+    }
+
+    @Transactional
+    public void deleteProfile(String id) {
+        AiConfigProfile profile = profileRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found: " + id));
+        if (profile.isActive() && profileRepository.count() <= 1) {
+            throw new IllegalStateException("Cannot delete the only active AI profile");
+        }
+        profileRepository.delete(profile);
+        if (profile.isActive()) {
+            // pick the oldest remaining profile as active
+            profileRepository.findAllByOrderByCreatedAtAsc().stream()
+                    .findFirst()
+                    .ifPresent(p -> {
+                        p.setActive(true);
+                        profileRepository.save(p);
+                        reload();
+                    });
+        }
+        log.info("AI profile deleted (id={})", id);
+    }
+
+    @Transactional
+    public AiConfigProfile activateProfile(String id) {
+        AiConfigProfile target = profileRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found: " + id));
+        profileRepository.findByActiveTrue().ifPresent(current -> {
+            current.setActive(false);
+            profileRepository.save(current);
+        });
+        target.setActive(true);
+        AiConfigProfile saved = profileRepository.save(target);
+        reload();
+        log.info("AI profile activated (id={}, name={})", saved.getId(), saved.getName());
+        return saved;
+    }
+
+    /** Test any profile by building a temporary ChatClient. Returns null on success. */
+    public String testProfile(String id) {
+        AiConfigProfile profile = profileRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found: " + id));
+        return testClient(buildClient(toResolvedConfig(profile, "db")));
+    }
+
+    /** Legacy compatibility: save/update the active profile (or create one if none). */
+    @Transactional
+    public synchronized void save(String apiKey, String endpoint, String model) {
+        Optional<AiConfigProfile> active = profileRepository.findByActiveTrue();
+        if (active.isPresent()) {
+            updateProfile(active.get().getId(), active.get().getName(), apiKey, endpoint, model);
+        } else {
+            createProfile("Default", apiKey, endpoint, model);
+        }
+    }
+
+    /** Legacy compatibility: test the active client. */
     public String testConnection() {
+        return testClient(currentClient);
+    }
+
+    // ---------- internals ----------
+
+    private ResolvedConfig loadFromDb() {
+        Optional<AiConfigProfile> active = profileRepository.findByActiveTrue();
+        if (active.isPresent()) {
+            return toResolvedConfig(active.get(), "db");
+        }
+        AiConfigProfile migrated = migrateLegacyConfig();
+        if (migrated != null) {
+            return toResolvedConfig(migrated, "db");
+        }
+        return null;
+    }
+
+    private AiConfigProfile migrateLegacyConfig() {
+        Optional<AppConfig> key = legacyConfigRepository.findById("ai.api_key");
+        if (key.isEmpty()) return null;
         try {
-            String reply = currentClient.prompt()
+            String apiKey = decrypt(key.get().getValue());
+            String endpoint = legacyConfigRepository.findById("ai.endpoint")
+                    .map(AppConfig::getValue)
+                    .orElse(envBaseUrl);
+            String model = legacyConfigRepository.findById("ai.model")
+                    .map(AppConfig::getValue)
+                    .orElse(envModel);
+            AiConfigProfile profile = AiConfigProfile.builder()
+                    .id(UUID.randomUUID().toString())
+                    .name("Default")
+                    .apiKey(encrypt(apiKey))
+                    .endpoint(endpoint)
+                    .model(model)
+                    .active(true)
+                    .build();
+            AiConfigProfile saved = profileRepository.save(profile);
+            // clean up legacy keys so migration only happens once
+            legacyConfigRepository.deleteById("ai.api_key");
+            legacyConfigRepository.deleteById("ai.endpoint");
+            legacyConfigRepository.deleteById("ai.model");
+            log.info("Migrated legacy AI config into profile {} (model={})", saved.getId(), model);
+            return saved;
+        } catch (Exception e) {
+            log.error("Failed to migrate legacy AI config: {}", e.toString());
+            return null;
+        }
+    }
+
+    private ResolvedConfig loadFromEnv() {
+        return new ResolvedConfig(null, "env-fallback", envApiKey, envBaseUrl, envModel, "env");
+    }
+
+    private ResolvedConfig toResolvedConfig(AiConfigProfile profile, String source) {
+        return new ResolvedConfig(profile.getId(), profile.getName(), decrypt(profile.getApiKey()),
+                profile.getEndpoint(), profile.getModel(), source);
+    }
+
+    private ChatClient buildClient(ResolvedConfig cfg) {
+        OpenAiChatOptions chatOpts = OpenAiChatOptions.builder()
+                .apiKey(cfg.apiKey())
+                .baseUrl(cfg.endpoint())
+                .model(cfg.model())
+                .temperature(0.7)
+                .build();
+        OpenAiChatModel chatModel = OpenAiChatModel.builder().options(chatOpts).build();
+        return ChatClient.create(chatModel);
+    }
+
+    private String testClient(ChatClient client) {
+        try {
+            String reply = client.prompt()
                     .user("Reply with the single word: pong")
                     .call()
                     .content();
@@ -128,49 +285,12 @@ public class AiConfigService {
         }
     }
 
-    // ---------- internals ----------
-
-    private ResolvedConfig loadFromDb() {
-        Optional<AppConfig> key = repository.findById("ai.api_key");
-        if (key.isEmpty()) return null;
-        try {
-            String apiKey = decrypt(key.get().getValue());
-            String endpoint = repository.findById("ai.endpoint")
-                    .map(AppConfig::getValue)
-                    .orElse(envBaseUrl);
-            String model = repository.findById("ai.model")
-                    .map(AppConfig::getValue)
-                    .orElse(envModel);
-            return new ResolvedConfig(apiKey, endpoint, model, "db");
-        } catch (Exception e) {
-            log.error("Failed to decrypt AI config from DB; falling back to env. Check AXIS_ENCRYPTION_PASSWORD/SALT: {}",
-                    e.toString());
-            return null;
-        }
-    }
-
-    private ResolvedConfig loadFromEnv() {
-        return new ResolvedConfig(envApiKey, envBaseUrl, envModel, "env");
-    }
-
-    private ChatClient buildClient(ResolvedConfig cfg) {
-        OpenAiChatOptions chatOpts = OpenAiChatOptions.builder()
-                .apiKey(cfg.apiKey())
-                .baseUrl(cfg.endpoint())
-                .model(cfg.model())
-                .temperature(0.7)
-                .build();
-
-        OpenAiChatModel chatModel = OpenAiChatModel.builder()
-                .options(chatOpts)
-                .build();
-
-        return ChatClient.create(chatModel);
-    }
-
     private TextEncryptor encryptor() {
-        // delux() returns TextEncryptor (string-friendly) and is sufficient for at-rest API key storage.
         return Encryptors.delux(encryptionPassword, encryptionSalt);
+    }
+
+    private String encrypt(String plaintext) {
+        return encryptor().encrypt(plaintext);
     }
 
     private String decrypt(String ciphertext) {

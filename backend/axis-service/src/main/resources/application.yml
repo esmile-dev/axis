@@ -6,7 +6,7 @@ spring:
     name: axis-backend
 
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/postgres}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/axis}
     username: ${DB_USERNAME:alan}
     password: ${DB_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
@@ -23,6 +23,8 @@ spring:
 
   ai:
     openai:
+      # Env vars are the fallback when no AI config profile exists in DB.
+      # Preferred workflow: add/activate profiles via Settings UI; DB is the source of truth.
       api-key: ${AI_API_KEY:demo}
       base-url: ${AI_BASE_URL:https://api.openai.com}
       chat:
@@ -66,8 +68,8 @@ app:
         finance-tech: NVIDIA,TSMC,BAT,earnings,财报,investment,市值,半导体,投融资
     # Timeouts (seconds)
     timeout:
-      per-source-seconds: 5
-      total-seconds: 15
+      per-source-seconds: 60
+      total-seconds: 300
     # Parallel fetch thread pool
     thread-pool-size: 8
 
