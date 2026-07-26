@@ -104,6 +104,21 @@ class AiConfigServiceTest {
     }
 
     @Test
+    void load_activeProfileUndecryptable_fallsBackToEnv() {
+        // ciphertext produced with different credentials (or junk) must not kill startup
+        String badCiphertext = Encryptors.delux("other-pwd", SALT).encrypt("secret");
+        AiConfigProfile broken = AiConfigProfile.builder()
+                .id("p1").name("Broken").apiKey(badCiphertext)
+                .endpoint("https://db.example.com").model("gpt-4o").active(true).build();
+        when(profileRepository.findByActiveTrue()).thenReturn(Optional.of(broken));
+
+        service.load();
+
+        assertThat(service.getConfig().source()).isEqualTo("env");
+        assertThat(service.getConfig().apiKey()).isEqualTo(ENV_KEY);
+    }
+
+    @Test
     void reload_afterConfigChange_returnsNewClient() {
         AiConfigProfile first = activeProfile("first", "https://first.com", "m1");
         AiConfigProfile second = activeProfile("second", "https://second.com", "m2");

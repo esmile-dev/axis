@@ -210,7 +210,13 @@ public class AiConfigService {
     private ResolvedConfig loadFromDb() {
         Optional<AiConfigProfile> active = profileRepository.findByActiveTrue();
         if (active.isPresent()) {
-            return toResolvedConfig(active.get(), "db");
+            try {
+                return toResolvedConfig(active.get(), "db");
+            } catch (Exception e) {
+                log.error("Failed to decrypt active AI profile {}; falling back to env. Check AXIS_ENCRYPTION_PASSWORD/SALT: {}",
+                        active.get().getId(), e.toString());
+                return null;
+            }
         }
         AiConfigProfile migrated = migrateLegacyConfig();
         if (migrated != null) {
