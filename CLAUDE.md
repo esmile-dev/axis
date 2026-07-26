@@ -26,7 +26,7 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个后端测试
 
 - **前端**：Nuxt 4 + Vue 3 Composition API + TypeScript
 - **后端**：Spring Boot 4.0 + Spring Data JPA + Spring AI 2.0（见 `backend/`）
-- **数据库**：PostgreSQL（本地默认 `postgres` 库，schema 为 `public`，连接配置见 `application.yml`）
+- **数据库**：PostgreSQL（本地默认 `axis` 库，schema 为 `public`，连接配置见 `application.yml`）
 - **UI**：Tailwind CSS + Shadcn-Vue (基于 Reka UI) + Lucide Vue Next 图标
 - **状态管理**：Pinia + VueUse
 
@@ -100,10 +100,10 @@ docs/
 详细流程见 `docs/workflow.md`（**开工前必读**），核心规则：
 
 - 新需求先分级（S/M/L），AI 提议、用户确认：S 直接改；M 写一份 `lite-spec.md`；L 走完整文档流
-- L 级在 `docs/feature/<功能名>/` 依次产出 requirements → design → tasks；每份 front-matter 的 `status` 被确认改为 `approved` 后才进入下一阶段；验收通过（verified）后写 summary 复盘归档
+- L 级在 `docs/feature/<功能名>/` 一次产出 requirements + design + tasks，用户一次确认（G1）后三份 `status` 同时置 `approved` 才开工；验收通过（G2，verified）后写 summary 复盘归档
 - 编码严格按 tasks 任务表执行：完成一个任务打一个勾并填 commit hash；不做任务表之外的事
 - 需要偏离已批准文档时：停下，在该文档「变更记录」写明，等确认后再继续
-- 文档风格：语言简洁，优先 Mermaid 图和表格；模板在 `docs/feature/_template/`
+- 文档风格：语言简洁；表格只用于可枚举事实，逻辑/示例/取舍理由用散文或代码块；文档分决策层（≤1 页用户审）与细节层（不限长、实现用）；模板在 `docs/feature/_template/`
 
 ## Coding Guidelines (from Karpathy's Approach)
 

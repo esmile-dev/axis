@@ -1,5 +1,5 @@
 ---
-status: draft          # draft → approved（G3）→ in-progress → verified（G4）
+status: draft          # draft → approved（G1）→ in-progress → verified（G2）
 feature: <功能名>
 created: <YYYY-MM-DD>
 ---
@@ -20,7 +20,7 @@ created: <YYYY-MM-DD>
 |---|------|----------|---------|----------------------|--------|
 | ☐ | T-001 | | | | |
 
-## 验收记录（实现完成后填写，G4 用）
+## 验收记录（实现完成后填写，G2 用）
 
 | 对应 FR | 结果 ✓/✗ | 验证方式（命令 / 请求响应 / 操作步骤） |
 |---------|----------|----------------------------------------|
