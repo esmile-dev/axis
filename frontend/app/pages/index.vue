@@ -116,11 +116,13 @@ watch([filterTime, debouncedSearch], () => {
 // Custom fetch function for server-side filtering
 async function refreshWithFilters() {
   localFirst.isSyncing.value = true
+  localFirst.syncError.value = false
   try {
     const items = await fetchItems()
     localFirst.items.value = items
     localFirst.lastSyncAt.value = new Date()
   } catch (err) {
+    localFirst.syncError.value = true
     console.error('Failed to fetch items:', err)
   } finally {
     localFirst.isSyncing.value = false
@@ -314,9 +316,10 @@ onMounted(() => {
         </Button>
         <span v-if="digestMessage" class="text-xs text-muted-foreground">{{ digestMessage }}</span>
         <div class="flex items-center gap-2 text-xs text-muted-foreground">
-          <Cloud v-if="!localFirst.isSyncing.value" class="w-4 h-4" />
-          <CloudOff v-else class="w-4 h-4 animate-pulse" />
-          <span>{{ localFirst.isSyncing.value ? 'Syncing...' : 'Synced' }}</span>
+          <CloudOff v-if="localFirst.isSyncing.value" class="w-4 h-4 animate-pulse" />
+          <CloudOff v-else-if="localFirst.syncError.value" class="w-4 h-4 text-destructive" />
+          <Cloud v-else class="w-4 h-4" />
+          <span :class="{ 'text-destructive': localFirst.syncError.value && !localFirst.isSyncing.value }">{{ localFirst.isSyncing.value ? 'Syncing...' : (localFirst.syncError.value ? 'Sync failed' : 'Synced') }}</span>
         </div>
       </div>
     </header>

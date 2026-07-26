@@ -5,6 +5,7 @@ const STORAGE_PREFIX = 'axis_'
 export interface LocalFirstReturn<T extends { id: string }> {
   items: Ref<T[]>
   isSyncing: Ref<boolean>
+  syncError: Ref<boolean>
   lastSyncAt: Ref<Date | null>
   init: () => void
   sync: () => Promise<void>
@@ -20,6 +21,7 @@ export function useLocalFirst<T extends { id: string }>(
   const storageKey = STORAGE_PREFIX + key
   const items: Ref<T[]> = ref([])
   const isSyncing = ref(false)
+  const syncError = ref(false)
   const lastSyncAt = ref<Date | null>(null)
 
   function loadFromLocal(): T[] {
@@ -44,12 +46,14 @@ export function useLocalFirst<T extends { id: string }>(
 
   async function sync() {
     isSyncing.value = true
+    syncError.value = false
     try {
       const serverData = await fetchFn()
       items.value = serverData
       saveToLocal(serverData)
       lastSyncAt.value = new Date()
     } catch (error) {
+      syncError.value = true
       console.error(`Sync failed for ${key}:`, error)
     } finally {
       isSyncing.value = false
@@ -85,6 +89,7 @@ export function useLocalFirst<T extends { id: string }>(
   return {
     items,
     isSyncing,
+    syncError,
     lastSyncAt,
     init,
     sync,

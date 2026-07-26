@@ -251,9 +251,10 @@ onMounted(async () => {
       </div>
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-2 text-xs text-muted-foreground">
-          <Cloud v-if="!localFirst.isSyncing.value" class="w-4 h-4" />
-          <CloudOff v-else class="w-4 h-4 animate-pulse" />
-          <span>{{ localFirst.isSyncing.value ? 'Syncing...' : 'Synced' }}</span>
+          <CloudOff v-if="localFirst.isSyncing.value" class="w-4 h-4 animate-pulse" />
+          <CloudOff v-else-if="localFirst.syncError.value" class="w-4 h-4 text-destructive" />
+          <Cloud v-else class="w-4 h-4" />
+          <span :class="{ 'text-destructive': localFirst.syncError.value && !localFirst.isSyncing.value }">{{ localFirst.isSyncing.value ? 'Syncing...' : (localFirst.syncError.value ? 'Sync failed' : 'Synced') }}</span>
         </div>
         <IssueCreator
           v-model:open="showIssueCreator"
