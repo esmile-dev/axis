@@ -68,6 +68,8 @@ cd backend
 - `DB_USERNAME` / `DB_PASSWORD`
 - `AI_API_KEY` / `AI_BASE_URL` / `AI_MODEL`
 
+完整变量模板见根目录 `.env.example`（前后端共用，复制为根目录 `.env` 即可）。
+
 ### 3. 启动前端（端口 7788）
 
 ```bash
