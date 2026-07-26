@@ -17,10 +17,11 @@ public class DigestExecutorConfig {
     @Bean(name = "digestExecutor", destroyMethod = "shutdown")
     public Executor digestExecutor(DigestProperties props) {
         int size = Math.max(2, props.threadPoolSize());
+
         ThreadPoolTaskExecutor exec = new ThreadPoolTaskExecutor();
         exec.setCorePoolSize(size);
         exec.setMaxPoolSize(size * 2);
-        exec.setQueueCapacity(16);
+        exec.setQueueCapacity(50);
         exec.setThreadNamePrefix("digest-");
         exec.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         exec.setWaitForTasksToCompleteOnShutdown(true);
