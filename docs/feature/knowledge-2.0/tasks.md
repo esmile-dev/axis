@@ -33,6 +33,35 @@ created: 2026-08-03
 
 | 对应 FR | 结果 ✓/✗ | 验证方式（命令 / 请求响应 / 操作步骤） |
 |---------|----------|----------------------------------------|
-| | | |
+| NFR-003/004（T-006） | ✓ | 见下方 AI 评测结果 |
 
 <!-- AI/Agent 功能追加评测结果：评测集版本 / 指标 / 阈值 / 实测 / 失败样例 -->
+
+### T-006 AI 评测结果（2026-08-04）
+
+- **评测集**：`docs/feature/knowledge-2.0/evals/summary-golden.jsonl` v1（2026-08-04 定稿入库）——10 篇真实文章（6 中 4 英，技术博客/教程/资讯，正文 1.0k–25k 字符），T-003 真实管线抓取整理
+- **评测入口**：`KnowledgeSummaryEval`（JUnit，`mvn test -pl axis-service` 随全量触达；无 `AI_API_KEY` 自动跳过）。触发命令：`set -a; source .env; set +a; mvn test -pl axis-service -Dtest=KnowledgeSummaryEval`（模型 deepseek-v4-flash，judge 契约见 `evals/summary-judge.md`）
+- **实测汇总输出原文**（最终全量轮，BUILD SUCCESS）：
+
+```
+[zh-01] structure=OK relevance=5 mindmap=OK reason=总结完全忠实原文，准确覆盖 Dario 观点与作者反驳，结构完整，无编造或遗漏。
+[zh-02] structure=OK relevance=5 mindmap=OK reason=总结完全忠实原文，准确覆盖四种缓存模式及关键观点，结构完整无编造。
+[zh-03] structure=OK relevance=5 mindmap=OK reason=总结完全忠实原文，准确抓住反讽主旨与认知/知识/技能/领导力四大维度，结构完整且无编造。
+[zh-04] structure=OK relevance=5 mindmap=OK reason=总结准确覆盖文章核心内容，三节结构完整，无遗漏或失实。
+[zh-05] structure=OK relevance=5 mindmap=OK reason=总结完全忠实于原文，结构完整且准确覆盖交易系统演进、DDD实践与核心洞察，无编造或遗漏。
+[zh-06] structure=OK relevance=5 mindmap=OK reason=总结完全忠实原文，准确覆盖核心主旨与关键内容，且TL;DR、要点、关键洞察三节结构完整，无可挑剔。
+[en-01] structure=OK relevance=5 mindmap=OK reason=总结完全忠实原文，准确覆盖核心观点并包含 TL;DR、要点、关键洞察三节，无编造或遗漏。
+[en-02] structure=OK relevance=5 mindmap=OK reason=总结完全忠实原文，涵盖核心观点与关键洞察，结构完整，无编造或遗漏。
+[en-03] structure=OK relevance=5 mindmap=OK reason=总结完全忠实原文，涵盖所有核心要点，结构完整，无编造或遗漏。
+[en-04] structure=OK relevance=5 mindmap=FAIL [H1 数量=0，应为 1, 节点总数 0，不在 5-40 区间] mindmapError=OpenAIInvalidDataException: Error reading response reason=总结完全忠实于原文，准确覆盖超线性回报的两种成因、核心启发与关键领域，三节结构完整，无编造或明显偏差。
+KnowledgeSummaryEval: total=10 summaryStructure=10/10 (1.00, 阈值 1.00) relevance>=4=10/10 (1.00, 阈值 0.80) mindmapLegal=9/10 (0.90, 阈值 0.90)
+```
+
+| 指标 | 阈值 | 实测 | 结论 |
+|------|------|------|------|
+| 总结结构合格率（脚本） | 100% | 10/10 = 100% | ✓ |
+| judge 相关性 ≥4/5 占比 | ≥80% | 10/10 = 100%（全部 5 分） | ✓ |
+| 脑图合法性合格率（脚本） | ≥90% | 9/10 = 90% | ✓ |
+
+- **失败样例**：en-04《Superlinear Returns》（25k 字符长文）脑图生成 LLM 调用抛 `OpenAIInvalidDataException`（transient API 读错误），产物按设计标 FAILED、内容为空——属 API 抖动而非 prompt 质量问题（该文脑图在迭代验证轮产出过合法大纲）；生产语义正确（可 regenerate 恢复）
+- **prompt 迭代记录**：第 1 轮脑图 6/9（长文节点 55/60 超标、超短文零标题）→ 强化 `PROMPT_MINDMAP` 节点数约束；第 2 轮结构 9/10（en-02 缺「关键洞察」节）→ `PROMPT_SUMMARY` 补「三节缺一不可」。两轮均记入 design.md 变更记录

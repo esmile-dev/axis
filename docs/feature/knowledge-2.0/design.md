@@ -144,3 +144,5 @@ sequenceDiagram
 |------|----------|------|
 | 2026-08-03 | 初稿 | 2.0 立项 |
 | 2026-08-03 | 影响面新增 test-scope 依赖 `spring-boot-data-jpa-test`（含测试用最小 `@SpringBootConfiguration` 配置类），用于 `KnowledgeItemRepository.search` 的 `@DataJpaTest` 集成测试 | T-002 任务审查发现 search JPQL 语义零自动化覆盖；Spring Boot 4 将测试切片拆为独立模块，不加依赖无法编译；用户已确认此变更点 |
+| 2026-08-04 | 脑图 prompt（`KnowledgePrompts.PROMPT_MINDMAP`）强化节点数约束：5-40 改为「严格控制……超出即不合格」并给合并/补足指引；补充「H1 恰好一个且为第一行」「无论文章长短必须输出大纲」「不输出解释或注释」 | T-006 首轮全量评测脑图合格率 6/9：长文节点超标（55/60 个）、超短文未输出任何标题；按 T-006 简报授权迭代 prompt 后重跑 |
+| 2026-08-04 | 总结 prompt（`KnowledgePrompts.PROMPT_SUMMARY`）补充「三节缺一不可，即使原文简短关键洞察也必须保留至少 1 条」 | T-006 次轮全量评测结构合格率 9/10：en-02 短文缺失「关键洞察」节；按 T-006 简报授权迭代 prompt 后重跑 |
