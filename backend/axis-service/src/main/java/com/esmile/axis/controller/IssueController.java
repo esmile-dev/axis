@@ -3,12 +3,13 @@ package com.esmile.axis.controller;
 import com.esmile.axis.entity.Comment;
 import com.esmile.axis.entity.Issue;
 import com.esmile.axis.service.IssueService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/issues")
@@ -28,31 +29,18 @@ public class IssueController {
     }
 
     @PostMapping
-    public Issue create(@RequestBody Map<String, Object> body) {
+    public Issue create(@Valid @RequestBody CreateIssueRequest req) {
         return issueService.create(
-                (String) body.get("title"),
-                (String) body.get("description"),
-                (String) body.get("status"),
-                (String) body.get("priority"),
-                (String) body.get("type"),
-                body.get("order") != null ? ((Number) body.get("order")).intValue() : null,
-                (String) body.get("projectId"),
-                (String) body.get("attachment")
+                req.title(), req.description(), req.status(), req.priority(),
+                req.type(), req.order(), req.projectId(), req.attachment()
         );
     }
 
     @PatchMapping("/{id}")
-    public Issue update(@PathVariable String id, @RequestBody Map<String, Object> body) {
+    public Issue update(@PathVariable String id, @Valid @RequestBody UpdateIssueRequest req) {
         return issueService.update(
-                id,
-                (String) body.get("title"),
-                (String) body.get("description"),
-                (String) body.get("status"),
-                (String) body.get("priority"),
-                (String) body.get("type"),
-                body.get("order") != null ? ((Number) body.get("order")).intValue() : null,
-                (String) body.get("projectId"),
-                (String) body.get("attachment")
+                id, req.title(), req.description(), req.status(), req.priority(),
+                req.type(), req.order(), req.projectId(), req.attachment()
         );
     }
 
@@ -70,7 +58,38 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/comments")
-    public Comment addComment(@PathVariable String id, @RequestBody Map<String, String> body) {
-        return issueService.addComment(id, body.get("content"));
+    public Comment addComment(@PathVariable String id, @Valid @RequestBody AddCommentRequest req) {
+        return issueService.addComment(id, req.content());
+    }
+
+    // ---------- DTOs ----------
+
+    public record CreateIssueRequest(
+            @NotBlank String title,
+            String description,
+            String status,
+            String priority,
+            String type,
+            Integer order,
+            String projectId,
+            String attachment
+    ) {
+    }
+
+    public record UpdateIssueRequest(
+            String title,
+            String description,
+            String status,
+            String priority,
+            String type,
+            Integer order,
+            String projectId,
+            String attachment
+    ) {
+    }
+
+    public record AddCommentRequest(
+            @NotBlank String content
+    ) {
     }
 }

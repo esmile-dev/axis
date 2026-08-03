@@ -2,12 +2,13 @@ package com.esmile.axis.controller;
 
 import com.esmile.axis.entity.Project;
 import com.esmile.axis.service.ProjectService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/projects")
@@ -22,29 +23,36 @@ public class ProjectController {
     }
 
     @PostMapping
-    public Project create(@RequestBody Map<String, Object> body) {
-        return projectService.create(
-                (String) body.get("name"),
-                (String) body.get("description"),
-                (String) body.get("status"),
-                body.get("order") != null ? ((Number) body.get("order")).intValue() : null
-        );
+    public Project create(@Valid @RequestBody CreateProjectRequest req) {
+        return projectService.create(req.name(), req.description(), req.status(), req.order());
     }
 
     @PatchMapping("/{id}")
-    public Project update(@PathVariable String id, @RequestBody Map<String, Object> body) {
-        return projectService.update(
-                id,
-                (String) body.get("name"),
-                (String) body.get("description"),
-                (String) body.get("status"),
-                body.get("order") != null ? ((Number) body.get("order")).intValue() : null
-        );
+    public Project update(@PathVariable String id, @Valid @RequestBody UpdateProjectRequest req) {
+        return projectService.update(id, req.name(), req.description(), req.status(), req.order());
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id) {
         projectService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ---------- DTOs ----------
+
+    public record CreateProjectRequest(
+            @NotBlank String name,
+            String description,
+            String status,
+            Integer order
+    ) {
+    }
+
+    public record UpdateProjectRequest(
+            String name,
+            String description,
+            String status,
+            Integer order
+    ) {
     }
 }

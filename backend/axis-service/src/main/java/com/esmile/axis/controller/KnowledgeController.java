@@ -2,12 +2,13 @@ package com.esmile.axis.controller;
 
 import com.esmile.axis.entity.KnowledgeDocument;
 import com.esmile.axis.service.KnowledgeService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/knowledge")
@@ -22,18 +23,32 @@ public class KnowledgeController {
     }
 
     @PostMapping
-    public KnowledgeDocument create(@RequestBody Map<String, String> body) {
-        return knowledgeService.create(body.get("title"), body.get("content"));
+    public KnowledgeDocument create(@Valid @RequestBody CreateKnowledgeDocRequest req) {
+        return knowledgeService.create(req.title(), req.content());
     }
 
     @PatchMapping("/{id}")
-    public KnowledgeDocument update(@PathVariable String id, @RequestBody Map<String, String> body) {
-        return knowledgeService.update(id, body.get("title"), body.get("content"));
+    public KnowledgeDocument update(@PathVariable String id, @Valid @RequestBody UpdateKnowledgeDocRequest req) {
+        return knowledgeService.update(id, req.title(), req.content());
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id) {
         knowledgeService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ---------- DTOs ----------
+
+    public record CreateKnowledgeDocRequest(
+            @NotBlank String title,
+            String content
+    ) {
+    }
+
+    public record UpdateKnowledgeDocRequest(
+            String title,
+            String content
+    ) {
     }
 }
