@@ -9,6 +9,9 @@ import com.esmile.axis.knowledge.entity.KnowledgeItem;
 import com.esmile.axis.knowledge.fetch.ArticleExtractor;
 import com.esmile.axis.knowledge.fetch.ArticleExtractor.ExtractedArticle;
 import com.esmile.axis.knowledge.fetch.WebPageFetcher;
+import com.esmile.axis.knowledge.importer.ImportedFileParser;
+import com.esmile.axis.knowledge.importer.ImportedFileParser.ParsedFile;
+import com.esmile.axis.knowledge.importer.KnowledgeFileStorage;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,8 +21,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -46,12 +52,17 @@ class KnowledgeServiceTest {
     private WebPageFetcher webPageFetcher;
     @Mock
     private ArticleExtractor articleExtractor;
+    @Mock
+    private ImportedFileParser importedFileParser;
+    @Mock
+    private KnowledgeFileStorage knowledgeFileStorage;
 
     private KnowledgeService service;
 
     @BeforeEach
     void setUp() {
-        service = new KnowledgeService(itemRepository, artifactRepository, webPageFetcher, articleExtractor);
+        service = new KnowledgeService(itemRepository, artifactRepository, webPageFetcher, articleExtractor,
+                importedFileParser, knowledgeFileStorage);
     }
 
     @Test
@@ -133,6 +144,68 @@ class KnowledgeServiceTest {
                     assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
                     assertThat(e.getReason()).contains("EXTRACT_FAILED");
                 });
+        verify(itemRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createFromImport_defaults_appliesArticleTypeAndFilenameTitle() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "读书笔记.md", "text/markdown", "# 正文".getBytes(StandardCharsets.UTF_8));
+        when(importedFileParser.parse(eq("读书笔记.md"), any())).thenReturn(new ParsedFile(".md", "# 正文"));
+        when(knowledgeFileStorage.store(any(), eq(".md"))).thenReturn("knowledge/uuid-1.md");
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        KnowledgeItemDetailView view = service.createFromImport(file, null, null);
+
+        ArgumentCaptor<KnowledgeItem> captor = ArgumentCaptor.forClass(KnowledgeItem.class);
+        verify(itemRepository).saveAndFlush(captor.capture());
+        KnowledgeItem saved = captor.getValue();
+        assertThat(saved.getType()).isEqualTo(KnowledgeType.ARTICLE);
+        assertThat(saved.getTitle()).isEqualTo("读书笔记");
+        assertThat(saved.getContent()).isEqualTo("# 正文");
+        assertThat(saved.getFilePath()).isEqualTo("knowledge/uuid-1.md");
+        assertThat(saved.getSummaryStatus()).isEqualTo(ArtifactStatus.PENDING);
+        assertThat(saved.getMindmapStatus()).isEqualTo(ArtifactStatus.PENDING);
+        assertThat(view.content()).isEqualTo("# 正文");
+    }
+
+    @Test
+    void createFromImport_explicitTypeAndTitle_keepsThem() {
+        MockMultipartFile file = new MockMultipartFile("file", "x.pdf", "application/pdf", new byte[]{1, 2});
+        when(importedFileParser.parse(eq("x.pdf"), any())).thenReturn(new ParsedFile(".pdf", "PDF 文本"));
+        when(knowledgeFileStorage.store(any(), eq(".pdf"))).thenReturn("knowledge/uuid-2.pdf");
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        KnowledgeItemDetailView view = service.createFromImport(file, KnowledgeType.BOOK, " 自定义标题 ");
+
+        assertThat(view.type()).isEqualTo(KnowledgeType.BOOK);
+        assertThat(view.title()).isEqualTo("自定义标题");
+    }
+
+    @Test
+    void createFromImport_blankTitle_fallsBackToFilename() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "报告.txt", "text/plain", "正文".getBytes(StandardCharsets.UTF_8));
+        when(importedFileParser.parse(eq("报告.txt"), any())).thenReturn(new ParsedFile(".txt", "正文"));
+        when(knowledgeFileStorage.store(any(), eq(".txt"))).thenReturn("knowledge/uuid-3.txt");
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        KnowledgeItemDetailView view = service.createFromImport(file, null, "  ");
+
+        assertThat(view.title()).isEqualTo("报告");
+    }
+
+    @Test
+    void createFromImport_parseFails_storesAndSavesNothing() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "evil.exe", "application/octet-stream", new byte[]{1});
+        when(importedFileParser.parse(any(), any())).thenThrow(
+                new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE: 仅支持 .md/.txt/.pdf"));
+
+        assertThatThrownBy(() -> service.createFromImport(file, null, null))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE));
+        verifyNoInteractions(knowledgeFileStorage);
         verify(itemRepository, never()).saveAndFlush(any());
     }
 

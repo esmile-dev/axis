@@ -8,6 +8,15 @@ spring:
       # reasons (e.g. FETCH_FAILED / EXTRACT_FAILED) reach the client.
       # (Spring Boot 4 moved server.error.* to spring.web.error.*)
       include-message: always
+  servlet:
+    multipart:
+      # Knowledge 2.0 file import (FR-003): accept up to 20MB per file.
+      # Boot 4 keeps these keys in the spring-boot-servlet module; defaults are
+      # max-file-size=1MB / max-request-size=10MB. Request limit sits slightly
+      # above the file limit so an exactly-20MB file still passes multipart
+      # framing overhead.
+      max-file-size: 20MB
+      max-request-size: 21MB
   application:
     name: axis-backend
 

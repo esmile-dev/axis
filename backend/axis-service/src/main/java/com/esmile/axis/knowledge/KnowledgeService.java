@@ -8,14 +8,19 @@ import com.esmile.axis.knowledge.entity.KnowledgeItem;
 import com.esmile.axis.knowledge.fetch.ArticleExtractor;
 import com.esmile.axis.knowledge.fetch.ArticleExtractor.ExtractedArticle;
 import com.esmile.axis.knowledge.fetch.WebPageFetcher;
+import com.esmile.axis.knowledge.importer.ImportedFileParser;
+import com.esmile.axis.knowledge.importer.ImportedFileParser.ParsedFile;
+import com.esmile.axis.knowledge.importer.KnowledgeFileStorage;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 
@@ -27,6 +32,8 @@ public class KnowledgeService {
     private final KnowledgeArtifactRepository artifactRepository;
     private final WebPageFetcher webPageFetcher;
     private final ArticleExtractor articleExtractor;
+    private final ImportedFileParser importedFileParser;
+    private final KnowledgeFileStorage knowledgeFileStorage;
 
     @Transactional(readOnly = true)
     public List<KnowledgeItemSummaryView> list(KnowledgeType type, KnowledgeStatus status, String tag, String q) {
@@ -64,6 +71,34 @@ public class KnowledgeService {
                 .sourceUrl(url)
                 .build();
         return KnowledgeItemDetailView.from(itemRepository.saveAndFlush(item), List.of());
+    }
+
+    @Transactional
+    public KnowledgeItemDetailView createFromImport(MultipartFile file, KnowledgeType type, String title) {
+        String originalFilename = file.getOriginalFilename();
+        byte[] bytes = readBytes(file);
+        ParsedFile parsed = importedFileParser.parse(originalFilename, bytes);
+        String filePath = knowledgeFileStorage.store(bytes, parsed.extension());
+        KnowledgeItem item = KnowledgeItem.builder()
+                .type(type != null ? type : KnowledgeType.ARTICLE)
+                .title(title != null && !title.isBlank() ? title.trim() : stripExtension(originalFilename))
+                .content(parsed.text())
+                .filePath(filePath)
+                .build();
+        return KnowledgeItemDetailView.from(itemRepository.saveAndFlush(item), List.of());
+    }
+
+    private byte[] readBytes(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "EXTRACT_FAILED: 无法读取上传文件");
+        }
+    }
+
+    private static String stripExtension(String filename) {
+        int dot = filename.lastIndexOf('.');
+        return dot > 0 ? filename.substring(0, dot) : filename;
     }
 
     @Transactional

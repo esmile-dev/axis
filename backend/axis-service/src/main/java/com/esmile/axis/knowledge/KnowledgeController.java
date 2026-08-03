@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -41,6 +42,14 @@ public class KnowledgeController {
     @PostMapping("/fetch")
     public KnowledgeItemDetailView fetch(@Valid @RequestBody FetchKnowledgeRequest req) {
         return knowledgeService.createFromUrl(req.url());
+    }
+
+    @PostMapping("/import")
+    public KnowledgeItemDetailView importFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) KnowledgeType type,
+            @RequestParam(required = false) String title) {
+        return knowledgeService.createFromImport(file, type, title);
     }
 
     @PatchMapping("/{id}")

@@ -69,6 +69,13 @@
             <version>0.64.8</version>
         </dependency>
 
+        <!-- File import pipeline (Knowledge 2.0: .pdf text extraction) -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.7</version>
+        </dependency>
+
         <!-- Spring AI OpenAI (Digest 2.0: AiConfigService + SummarizationService) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
