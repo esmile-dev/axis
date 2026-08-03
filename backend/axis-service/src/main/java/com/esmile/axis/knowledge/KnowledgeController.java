@@ -62,4 +62,10 @@ public class KnowledgeController {
         knowledgeService.delete(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{id}/artifacts/{kind}/regenerate")
+    public ResponseEntity<KnowledgeItemDetailView> regenerateArtifact(
+            @PathVariable String id, @PathVariable ArtifactKind kind) {
+        return ResponseEntity.accepted().body(knowledgeService.regenerateArtifact(id, kind));
+    }
 }

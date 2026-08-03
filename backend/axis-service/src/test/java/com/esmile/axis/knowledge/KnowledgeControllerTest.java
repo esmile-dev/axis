@@ -121,4 +121,25 @@ class KnowledgeControllerTest {
                 .andExpect(jsonPath("$.title").value("书名"));
         verify(knowledgeService).createFromImport(any(), eq(KnowledgeType.BOOK), eq("书名"));
     }
+
+    @Test
+    void regenerate_invalidKind_returns400() throws Exception {
+        mockMvc.perform(post("/api/knowledge/id1/artifacts/BOGUS/regenerate"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(knowledgeService);
+    }
+
+    @Test
+    void regenerate_validKind_returns202AndDelegates() throws Exception {
+        when(knowledgeService.regenerateArtifact("id1", ArtifactKind.SUMMARY)).thenReturn(new KnowledgeItemDetailView(
+                "id1", KnowledgeType.ARTICLE, "标题", KnowledgeStatus.UNREAD, 0,
+                ArtifactStatus.GENERATING, ArtifactStatus.PENDING, Set.of(), null,
+                Instant.parse("2026-08-03T00:00:00Z"), Instant.parse("2026-08-03T00:00:00Z"), "正文", List.of()));
+
+        mockMvc.perform(post("/api/knowledge/id1/artifacts/SUMMARY/regenerate"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.summaryStatus").value("GENERATING"))
+                .andExpect(jsonPath("$.mindmapStatus").value("PENDING"));
+        verify(knowledgeService).regenerateArtifact("id1", ArtifactKind.SUMMARY);
+    }
 }

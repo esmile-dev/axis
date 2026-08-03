@@ -22,7 +22,7 @@ public class KnowledgeArtifact {
     @Column(length = 30)
     private String id;
 
-    @ManyToOne(optional = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "item_id", nullable = false)
     private KnowledgeItem item;
 

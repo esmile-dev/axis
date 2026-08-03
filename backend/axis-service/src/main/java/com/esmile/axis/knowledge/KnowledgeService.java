@@ -8,12 +8,15 @@ import com.esmile.axis.knowledge.entity.KnowledgeItem;
 import com.esmile.axis.knowledge.fetch.ArticleExtractor;
 import com.esmile.axis.knowledge.fetch.ArticleExtractor.ExtractedArticle;
 import com.esmile.axis.knowledge.fetch.WebPageFetcher;
+import com.esmile.axis.knowledge.generate.KnowledgeArtifactRegenerationEvent;
+import com.esmile.axis.knowledge.generate.KnowledgeItemCreatedEvent;
 import com.esmile.axis.knowledge.importer.ImportedFileParser;
 import com.esmile.axis.knowledge.importer.ImportedFileParser.ParsedFile;
 import com.esmile.axis.knowledge.importer.KnowledgeFileStorage;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +37,7 @@ public class KnowledgeService {
     private final ArticleExtractor articleExtractor;
     private final ImportedFileParser importedFileParser;
     private final KnowledgeFileStorage knowledgeFileStorage;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public List<KnowledgeItemSummaryView> list(KnowledgeType type, KnowledgeStatus status, String tag, String q) {
@@ -57,7 +61,9 @@ public class KnowledgeService {
                 .sourceUrl(req.sourceUrl())
                 .tags(req.tags() != null ? new HashSet<>(req.tags()) : new HashSet<>())
                 .build();
-        return KnowledgeItemDetailView.from(itemRepository.saveAndFlush(item), List.of());
+        KnowledgeItem saved = itemRepository.saveAndFlush(item);
+        eventPublisher.publishEvent(new KnowledgeItemCreatedEvent(saved.getId()));
+        return KnowledgeItemDetailView.from(saved, List.of());
     }
 
     @Transactional
@@ -70,7 +76,9 @@ public class KnowledgeService {
                 .content(article.markdown())
                 .sourceUrl(url)
                 .build();
-        return KnowledgeItemDetailView.from(itemRepository.saveAndFlush(item), List.of());
+        KnowledgeItem saved = itemRepository.saveAndFlush(item);
+        eventPublisher.publishEvent(new KnowledgeItemCreatedEvent(saved.getId()));
+        return KnowledgeItemDetailView.from(saved, List.of());
     }
 
     @Transactional
@@ -85,7 +93,9 @@ public class KnowledgeService {
                 .content(parsed.text())
                 .filePath(filePath)
                 .build();
-        return KnowledgeItemDetailView.from(itemRepository.saveAndFlush(item), List.of());
+        KnowledgeItem saved = itemRepository.saveAndFlush(item);
+        eventPublisher.publishEvent(new KnowledgeItemCreatedEvent(saved.getId()));
+        return KnowledgeItemDetailView.from(saved, List.of());
     }
 
     private byte[] readBytes(MultipartFile file) {
@@ -116,6 +126,23 @@ public class KnowledgeService {
         KnowledgeItem item = findOrThrow(id);
         artifactRepository.deleteAll(artifactRepository.findByItemId(id));
         itemRepository.delete(item);
+    }
+
+    /**
+     * Re-run generation for one artifact. The regeneration event fires after this
+     * transaction commits, so the async worker never races the GENERATING write
+     * (a later commit would overwrite its DONE/FAILED with stale entity state).
+     */
+    @Transactional
+    public KnowledgeItemDetailView regenerateArtifact(String id, ArtifactKind kind) {
+        KnowledgeItem item = findOrThrow(id);
+        switch (kind) {
+            case SUMMARY -> item.setSummaryStatus(ArtifactStatus.GENERATING);
+            case MINDMAP -> item.setMindmapStatus(ArtifactStatus.GENERATING);
+        }
+        KnowledgeItem saved = itemRepository.saveAndFlush(item);
+        eventPublisher.publishEvent(new KnowledgeArtifactRegenerationEvent(id, kind));
+        return KnowledgeItemDetailView.from(saved, artifactRepository.findByItemId(id));
     }
 
     private KnowledgeItem findOrThrow(String id) {

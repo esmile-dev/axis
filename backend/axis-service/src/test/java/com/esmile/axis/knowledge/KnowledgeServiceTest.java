@@ -9,6 +9,8 @@ import com.esmile.axis.knowledge.entity.KnowledgeItem;
 import com.esmile.axis.knowledge.fetch.ArticleExtractor;
 import com.esmile.axis.knowledge.fetch.ArticleExtractor.ExtractedArticle;
 import com.esmile.axis.knowledge.fetch.WebPageFetcher;
+import com.esmile.axis.knowledge.generate.KnowledgeArtifactRegenerationEvent;
+import com.esmile.axis.knowledge.generate.KnowledgeItemCreatedEvent;
 import com.esmile.axis.knowledge.importer.ImportedFileParser;
 import com.esmile.axis.knowledge.importer.ImportedFileParser.ParsedFile;
 import com.esmile.axis.knowledge.importer.KnowledgeFileStorage;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -56,13 +59,15 @@ class KnowledgeServiceTest {
     private ImportedFileParser importedFileParser;
     @Mock
     private KnowledgeFileStorage knowledgeFileStorage;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private KnowledgeService service;
 
     @BeforeEach
     void setUp() {
         service = new KnowledgeService(itemRepository, artifactRepository, webPageFetcher, articleExtractor,
-                importedFileParser, knowledgeFileStorage);
+                importedFileParser, knowledgeFileStorage, eventPublisher);
     }
 
     @Test
@@ -84,6 +89,7 @@ class KnowledgeServiceTest {
         assertThat(saved.getSourceUrl()).isNull();
         assertThat(view.content()).isEqualTo("正文");
         assertThat(view.artifacts()).isEmpty();
+        verify(eventPublisher).publishEvent(any(KnowledgeItemCreatedEvent.class));
     }
 
     @Test
@@ -117,6 +123,7 @@ class KnowledgeServiceTest {
         assertThat(saved.getSummaryStatus()).isEqualTo(ArtifactStatus.PENDING);
         assertThat(saved.getMindmapStatus()).isEqualTo(ArtifactStatus.PENDING);
         assertThat(view.content()).isEqualTo("# 正文");
+        verify(eventPublisher).publishEvent(any(KnowledgeItemCreatedEvent.class));
     }
 
     @Test
@@ -167,6 +174,7 @@ class KnowledgeServiceTest {
         assertThat(saved.getSummaryStatus()).isEqualTo(ArtifactStatus.PENDING);
         assertThat(saved.getMindmapStatus()).isEqualTo(ArtifactStatus.PENDING);
         assertThat(view.content()).isEqualTo("# 正文");
+        verify(eventPublisher).publishEvent(any(KnowledgeItemCreatedEvent.class));
     }
 
     @Test
@@ -324,6 +332,32 @@ class KnowledgeServiceTest {
                 .isInstanceOf(ResponseStatusException.class);
         verify(artifactRepository, never()).deleteAll(anyList());
         verify(itemRepository, never()).delete(any());
+    }
+
+    @Test
+    void regenerateArtifact_existing_marksGeneratingAndPublishesEvent() {
+        KnowledgeItem item = item("i1", "标题");
+        when(itemRepository.findById("i1")).thenReturn(Optional.of(item));
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(artifactRepository.findByItemId("i1")).thenReturn(List.of());
+
+        KnowledgeItemDetailView view = service.regenerateArtifact("i1", ArtifactKind.SUMMARY);
+
+        assertThat(item.getSummaryStatus()).isEqualTo(ArtifactStatus.GENERATING);
+        assertThat(item.getMindmapStatus()).isEqualTo(ArtifactStatus.PENDING);
+        assertThat(view.summaryStatus()).isEqualTo(ArtifactStatus.GENERATING);
+        verify(itemRepository).saveAndFlush(item);
+        verify(eventPublisher).publishEvent(new KnowledgeArtifactRegenerationEvent("i1", ArtifactKind.SUMMARY));
+    }
+
+    @Test
+    void regenerateArtifact_missing_throwsNotFound() {
+        when(itemRepository.findById("nope")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.regenerateArtifact("nope", ArtifactKind.MINDMAP))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     private static KnowledgeItem item(String id, String title) {
