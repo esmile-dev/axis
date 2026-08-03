@@ -1,5 +1,6 @@
 package com.esmile.axis.knowledge;
 
+import com.esmile.axis.entity.InboxItem;
 import com.esmile.axis.knowledge.dto.CreateKnowledgeItemRequest;
 import com.esmile.axis.knowledge.dto.KnowledgeItemDetailView;
 import com.esmile.axis.knowledge.dto.KnowledgeItemSummaryView;
@@ -15,6 +16,8 @@ import com.esmile.axis.knowledge.importer.ImportedFileParser.ParsedFile;
 import com.esmile.axis.knowledge.importer.KnowledgeFileStorage;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
+import com.esmile.axis.repository.InboxItemRepository;
+import com.esmile.axis.service.InboxService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
@@ -26,10 +29,14 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class KnowledgeService {
+
+    /** Same shape rule as FetchKnowledgeRequest: whole trimmed content must be one http/https URL. */
+    private static final Pattern URL_PATTERN = Pattern.compile("(?i)^https?://.+");
 
     private final KnowledgeItemRepository itemRepository;
     private final KnowledgeArtifactRepository artifactRepository;
@@ -38,6 +45,8 @@ public class KnowledgeService {
     private final ImportedFileParser importedFileParser;
     private final KnowledgeFileStorage knowledgeFileStorage;
     private final ApplicationEventPublisher eventPublisher;
+    private final InboxItemRepository inboxItemRepository;
+    private final InboxService inboxService;
 
     @Transactional(readOnly = true)
     public List<KnowledgeItemSummaryView> list(KnowledgeType type, KnowledgeStatus status, String tag, String q) {
@@ -96,6 +105,29 @@ public class KnowledgeService {
         KnowledgeItem saved = itemRepository.saveAndFlush(item);
         eventPublisher.publishEvent(new KnowledgeItemCreatedEvent(saved.getId()));
         return KnowledgeItemDetailView.from(saved, List.of());
+    }
+
+    /**
+     * FR-008: transfer an inbox item into the knowledge base. Trimmed content that is a
+     * single http/https URL goes through the fetch pipeline (ARTICLE); anything else is
+     * stored as a NOTE titled by its first line (max 50 chars). On success the inbox item
+     * is marked read via InboxService's existing logic; the inbox item is never deleted.
+     */
+    @Transactional
+    public KnowledgeItemDetailView createFromInbox(String inboxItemId) {
+        InboxItem inboxItem = inboxItemRepository.findById(inboxItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Inbox item not found: " + inboxItemId));
+        String content = inboxItem.getContent().trim();
+        KnowledgeItemDetailView view = URL_PATTERN.matcher(content).matches()
+                ? createFromUrl(content)
+                : create(new CreateKnowledgeItemRequest(KnowledgeType.NOTE, deriveTitle(content), content, null, null));
+        inboxService.update(inboxItemId, null, null, true);
+        return view;
+    }
+
+    private static String deriveTitle(String content) {
+        String firstLine = content.lines().findFirst().orElse(content).trim();
+        return firstLine.length() > 50 ? firstLine.substring(0, 50) : firstLine;
     }
 
     private byte[] readBytes(MultipartFile file) {

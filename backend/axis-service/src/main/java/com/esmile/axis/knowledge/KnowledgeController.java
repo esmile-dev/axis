@@ -2,6 +2,7 @@ package com.esmile.axis.knowledge;
 
 import com.esmile.axis.knowledge.dto.CreateKnowledgeItemRequest;
 import com.esmile.axis.knowledge.dto.FetchKnowledgeRequest;
+import com.esmile.axis.knowledge.dto.FromInboxRequest;
 import com.esmile.axis.knowledge.dto.KnowledgeItemDetailView;
 import com.esmile.axis.knowledge.dto.KnowledgeItemSummaryView;
 import com.esmile.axis.knowledge.dto.UpdateKnowledgeItemRequest;
@@ -42,6 +43,11 @@ public class KnowledgeController {
     @PostMapping("/fetch")
     public KnowledgeItemDetailView fetch(@Valid @RequestBody FetchKnowledgeRequest req) {
         return knowledgeService.createFromUrl(req.url());
+    }
+
+    @PostMapping("/from-inbox")
+    public KnowledgeItemDetailView fromInbox(@Valid @RequestBody FromInboxRequest req) {
+        return knowledgeService.createFromInbox(req.inboxItemId());
     }
 
     @PostMapping("/import")

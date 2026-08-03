@@ -80,6 +80,32 @@ class KnowledgeControllerTest {
     }
 
     @Test
+    void fromInbox_blankId_returns400() throws Exception {
+        mockMvc.perform(post("/api/knowledge/from-inbox")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"inboxItemId\":\"\"}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(knowledgeService);
+    }
+
+    @Test
+    void fromInbox_validId_delegatesToService() throws Exception {
+        when(knowledgeService.createFromInbox("in1")).thenReturn(new KnowledgeItemDetailView(
+                "id4", KnowledgeType.NOTE, "记录一下这个想法", KnowledgeStatus.UNREAD, 0,
+                ArtifactStatus.PENDING, ArtifactStatus.PENDING, Set.of(), null,
+                Instant.parse("2026-08-03T00:00:00Z"), Instant.parse("2026-08-03T00:00:00Z"),
+                "记录一下这个想法\n第二行补充", List.of()));
+
+        mockMvc.perform(post("/api/knowledge/from-inbox")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"inboxItemId\":\"in1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("NOTE"))
+                .andExpect(jsonPath("$.title").value("记录一下这个想法"));
+        verify(knowledgeService).createFromInbox("in1");
+    }
+
+    @Test
     void import_missingFile_returns400() throws Exception {
         mockMvc.perform(multipart("/api/knowledge/import"))
                 .andExpect(status().isBadRequest());

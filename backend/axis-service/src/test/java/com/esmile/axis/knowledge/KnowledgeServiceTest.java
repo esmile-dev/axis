@@ -1,5 +1,6 @@
 package com.esmile.axis.knowledge;
 
+import com.esmile.axis.entity.InboxItem;
 import com.esmile.axis.knowledge.dto.CreateKnowledgeItemRequest;
 import com.esmile.axis.knowledge.dto.KnowledgeItemDetailView;
 import com.esmile.axis.knowledge.dto.KnowledgeItemSummaryView;
@@ -16,6 +17,8 @@ import com.esmile.axis.knowledge.importer.ImportedFileParser.ParsedFile;
 import com.esmile.axis.knowledge.importer.KnowledgeFileStorage;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
+import com.esmile.axis.repository.InboxItemRepository;
+import com.esmile.axis.service.InboxService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,13 +64,17 @@ class KnowledgeServiceTest {
     private KnowledgeFileStorage knowledgeFileStorage;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private InboxItemRepository inboxItemRepository;
+    @Mock
+    private InboxService inboxService;
 
     private KnowledgeService service;
 
     @BeforeEach
     void setUp() {
         service = new KnowledgeService(itemRepository, artifactRepository, webPageFetcher, articleExtractor,
-                importedFileParser, knowledgeFileStorage, eventPublisher);
+                importedFileParser, knowledgeFileStorage, eventPublisher, inboxItemRepository, inboxService);
     }
 
     @Test
@@ -218,6 +225,87 @@ class KnowledgeServiceTest {
     }
 
     @Test
+    void createFromInbox_urlContent_fetchesArticleAndMarksRead() {
+        when(inboxItemRepository.findById("in1")).thenReturn(Optional.of(inboxItem("in1", "https://example.com/a")));
+        when(webPageFetcher.fetch("https://example.com/a")).thenReturn("<html>page</html>");
+        when(articleExtractor.extract("<html>page</html>"))
+                .thenReturn(new ExtractedArticle("抓取标题", "# 正文"));
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        KnowledgeItemDetailView view = service.createFromInbox("in1");
+
+        ArgumentCaptor<KnowledgeItem> captor = ArgumentCaptor.forClass(KnowledgeItem.class);
+        verify(itemRepository).saveAndFlush(captor.capture());
+        KnowledgeItem saved = captor.getValue();
+        assertThat(saved.getType()).isEqualTo(KnowledgeType.ARTICLE);
+        assertThat(saved.getSourceUrl()).isEqualTo("https://example.com/a");
+        assertThat(view.title()).isEqualTo("抓取标题");
+        verify(inboxService).update("in1", null, null, true);
+        verify(eventPublisher).publishEvent(any(KnowledgeItemCreatedEvent.class));
+    }
+
+    @Test
+    void createFromInbox_paddedUrlContent_trimsThenFetches() {
+        when(inboxItemRepository.findById("in1"))
+                .thenReturn(Optional.of(inboxItem("in1", "  https://example.com/a\n")));
+        when(webPageFetcher.fetch("https://example.com/a")).thenReturn("<html>page</html>");
+        when(articleExtractor.extract("<html>page</html>"))
+                .thenReturn(new ExtractedArticle("抓取标题", "# 正文"));
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.createFromInbox("in1");
+
+        verify(webPageFetcher).fetch("https://example.com/a");
+        verify(inboxService).update("in1", null, null, true);
+    }
+
+    @Test
+    void createFromInbox_plainText_createsNoteTitledByFirstLineAndMarksRead() {
+        when(inboxItemRepository.findById("in2"))
+                .thenReturn(Optional.of(inboxItem("in2", "  记录一下这个想法\n第二行补充  ")));
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        KnowledgeItemDetailView view = service.createFromInbox("in2");
+
+        ArgumentCaptor<KnowledgeItem> captor = ArgumentCaptor.forClass(KnowledgeItem.class);
+        verify(itemRepository).saveAndFlush(captor.capture());
+        KnowledgeItem saved = captor.getValue();
+        assertThat(saved.getType()).isEqualTo(KnowledgeType.NOTE);
+        assertThat(saved.getTitle()).isEqualTo("记录一下这个想法");
+        assertThat(saved.getContent()).isEqualTo("记录一下这个想法\n第二行补充");
+        assertThat(view.type()).isEqualTo(KnowledgeType.NOTE);
+        verifyNoInteractions(webPageFetcher);
+        verify(inboxService).update("in2", null, null, true);
+        verify(eventPublisher).publishEvent(any(KnowledgeItemCreatedEvent.class));
+    }
+
+    @Test
+    void createFromInbox_longFirstLine_truncatesTitleTo50Chars() {
+        String longLine = "很".repeat(60);
+        when(inboxItemRepository.findById("in3"))
+                .thenReturn(Optional.of(inboxItem("in3", longLine + "\n第二行")));
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.createFromInbox("in3");
+
+        ArgumentCaptor<KnowledgeItem> captor = ArgumentCaptor.forClass(KnowledgeItem.class);
+        verify(itemRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getTitle()).isEqualTo("很".repeat(50));
+        verify(inboxService).update("in3", null, null, true);
+    }
+
+    @Test
+    void createFromInbox_missingInboxItem_throwsNotFound() {
+        when(inboxItemRepository.findById("nope")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createFromInbox("nope"))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        verifyNoInteractions(inboxService, webPageFetcher);
+        verify(itemRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void list_noFilters_passesNullsAndMapsSummaries() {
         KnowledgeItem item = item("i1", "标题一");
         when(itemRepository.search(null, null, null, null)).thenReturn(List.of(item));
@@ -358,6 +446,12 @@ class KnowledgeServiceTest {
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    private static InboxItem inboxItem(String id, String content) {
+        InboxItem item = InboxItem.builder().content(content).build();
+        item.setId(id);
+        return item;
     }
 
     private static KnowledgeItem item(String id, String title) {
