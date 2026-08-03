@@ -19,7 +19,7 @@ created: 2026-08-03
 | ☑ | T-001 | 数据模型：`knowledge/` 包实体（KnowledgeItem/KnowledgeArtifact/枚举/tag）+ Repository；删除旧 Knowledge 四件套与旧表说明；KnowledgeTool 临时适配新模型（保证全模块编译通过，向量升级留 T-012） | FR-001 | `mvn compile` 过；启动后新表建成；旧类不再存在 | fc08813 |
 | ☑ | T-002 | 基础 API：粘贴创建/列表筛选搜索/详情/PATCH/DELETE（DTO record + Bean Validation）+ Service 单测 | FR-001/005 | curl 全链路通；`mvn test -pl axis-service` 过 | 9c059f0 |
 | ☑ | T-003 | URL 抓取管线（jsoup+flexmark，15s 超时，422 错误语义）+ 单测 | FR-002 | 真实 URL 抓取 content 干净；故障注入返回 422 | 6300732 |
-| ☐ | T-004 | 文件导入（md/txt/pdf，pdfbox，≤20MB，存 UPLOAD_DIR/knowledge/）+ 单测 | FR-003 | 三类文件导入成功；超限/类型错误被拒 | |
+| ☑ | T-004 | 文件导入（md/txt/pdf，pdfbox，≤20MB，存 UPLOAD_DIR/knowledge/）+ 单测 | FR-003 | 三类文件导入成功；超限/类型错误被拒 | 371c42f |
 | ☐ | T-005 | 异步生成管线：事件+@Async+两产物状态机+regenerate 端点+总结/脑图 prompt 初版 | FR-004, NFR-001 | 入库后产物自动 DONE；注入 LLM 故障 → FAILED → regenerate 恢复 | |
 | ☐ | T-006 | 评测：`evals/summary-golden.jsonl`（≥10 篇）+ 脑图合法性校验 + 评测入口，跑出达标结果 | NFR-003/004 | 评测实测达阈值，结果填入验收记录 | |
 | ☐ | T-007 | from-inbox 端点：URL/文字两分支 + inbox 标已读 + 单测 | FR-008 | 两类条目转入成功且原条目 readAt 非空 | |
