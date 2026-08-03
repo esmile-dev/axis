@@ -27,7 +27,7 @@ created: 2026-08-03
 | 删除 | `axis-service` 旧 `KnowledgeController/Service/Repository/entity/KnowledgeDocument` | 整体删除，由新包替代 |
 | 删除 | DB 旧表 `knowledge_document` | 实现时本地手动 DROP 一次（无迁移脚本约定） |
 | 新增 | `axis-service` `knowledge/` 包（entity/repository/service/controller/pipeline） | 新建 |
-| 新增依赖 | `axis-service/pom.xml`：jsoup、flexmark-html2md-converter、pdfbox、spring-ai pgvector store | 新增 |
+| 新增依赖 | `axis-service/pom.xml`：jsoup、flexmark-html2md-converter、pdfbox、spring-ai pgvector store；test-scope `spring-boot-data-jpa-test`（变更记录 2026-08-03） | 新增 |
 | 修改 | `AiConfigService` | 增加 `getEmbeddingModel()`，与 ChatClient 同配置源 |
 | 修改 | `axis-agent` `KnowledgeTool` | 三个方法重写（检索走向量/降级、创建走新管线）= 接口契约变更，本设计覆盖 |
 | 修改 | `InboxService` | 复用标已读逻辑供 from-inbox 调用 |
@@ -143,3 +143,4 @@ sequenceDiagram
 | 日期 | 变更内容 | 原因 |
 |------|----------|------|
 | 2026-08-03 | 初稿 | 2.0 立项 |
+| 2026-08-03 | 影响面新增 test-scope 依赖 `spring-boot-data-jpa-test`（含测试用最小 `@SpringBootConfiguration` 配置类），用于 `KnowledgeItemRepository.search` 的 `@DataJpaTest` 集成测试 | T-002 任务审查发现 search JPQL 语义零自动化覆盖；Spring Boot 4 将测试切片拆为独立模块，不加依赖无法编译；用户已确认此变更点 |
