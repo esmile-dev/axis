@@ -1,5 +1,6 @@
 package com.esmile.axis.ai.tool;
 
+import com.esmile.axis.ai.ToolCallNotifier;
 import com.esmile.axis.entity.KnowledgeDocument;
 import com.esmile.axis.service.KnowledgeService;
 import lombok.RequiredArgsConstructor;
@@ -18,17 +19,20 @@ import java.util.stream.Collectors;
 public class KnowledgeTool {
 
     private final KnowledgeService knowledgeService;
+    private final ToolCallNotifier toolCallNotifier;
 
     @Tool(description = "在知识库中创建一篇新文档")
     public String createDocument(
             @ToolParam(description = "文档标题") String title,
             @ToolParam(description = "文档内容（Markdown 格式）") String content) {
+        toolCallNotifier.emit("创建知识文档");
         KnowledgeDocument doc = knowledgeService.create(title, content);
         return String.format("✅ 已创建知识文档：%s (ID: %s)", doc.getTitle(), doc.getId());
     }
 
     @Tool(description = "列出知识库中的所有文档")
     public String listDocuments() {
+        toolCallNotifier.emit("列出知识文档");
         List<KnowledgeDocument> docs = knowledgeService.findAll();
         if (docs.isEmpty()) {
             return "📚 知识库为空";
@@ -41,6 +45,7 @@ public class KnowledgeTool {
     @Tool(description = "搜索知识库文档内容（关键词搜索）")
     public String searchDocuments(
             @ToolParam(description = "搜索关键词") String keyword) {
+        toolCallNotifier.emit("搜索知识库");
         List<KnowledgeDocument> docs = knowledgeService.findAll();
         List<KnowledgeDocument> matched = docs.stream()
                 .filter(d -> d.getTitle().toLowerCase().contains(keyword.toLowerCase())

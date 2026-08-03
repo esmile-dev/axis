@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Inbox, CheckSquare, BookOpen, Settings, Command, FolderKanban, FolderOpen, ChevronDown, ChevronRight } from 'lucide-vue-next'
+import { Inbox, CheckSquare, BookOpen, Settings, Command, FolderKanban, FolderOpen, ChevronDown, ChevronRight, MessageSquare } from 'lucide-vue-next'
 
 interface Project {
   id: string
@@ -8,6 +8,7 @@ interface Project {
 }
 
 const navItems = [
+  { name: 'Chat', path: '/chat', icon: MessageSquare },
   { name: 'Inbox', path: '/', icon: Inbox },
   { name: 'Todo', path: '/todo', icon: CheckSquare },
   { name: 'Knowledge', path: '/knowledge', icon: BookOpen },

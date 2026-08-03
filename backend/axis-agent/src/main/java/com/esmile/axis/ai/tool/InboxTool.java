@@ -1,5 +1,6 @@
 package com.esmile.axis.ai.tool;
 
+import com.esmile.axis.ai.ToolCallNotifier;
 import com.esmile.axis.entity.InboxItem;
 import com.esmile.axis.service.InboxService;
 import lombok.RequiredArgsConstructor;
@@ -18,10 +19,12 @@ import java.util.stream.Collectors;
 public class InboxTool {
 
     private final InboxService inboxService;
+    private final ToolCallNotifier toolCallNotifier;
 
     @Tool(description = "在 Inbox 中创建一条新的灵感/想法记录")
     public String createInboxItem(
             @ToolParam(description = "灵感/想法的内容") String content) {
+        toolCallNotifier.emit("创建 Inbox 条目");
         InboxItem item = inboxService.create(content);
         return "✅ 已创建 Inbox 条目：" + item.getContent() + " (ID: " + item.getId() + ")";
     }
@@ -29,6 +32,7 @@ public class InboxTool {
     @Tool(description = "列出 Inbox 中的条目，可按状态筛选")
     public String listInboxItems(
             @ToolParam(description = "状态筛选：TODO / DONE / all", required = false) String status) {
+        toolCallNotifier.emit("列出 Inbox 条目");
         List<InboxItem> items = inboxService.findAll(status, null, null);
         if (items.isEmpty()) {
             return "📭 Inbox 中没有条目";
@@ -42,6 +46,7 @@ public class InboxTool {
     @Tool(description = "将 Inbox 条目标记为已完成（DONE）")
     public String markInboxDone(
             @ToolParam(description = "Inbox 条目的 ID") String id) {
+        toolCallNotifier.emit("标记 Inbox 条目完成");
         inboxService.update(id, null, "DONE", false);
         return "✅ 已标记为完成";
     }
@@ -49,6 +54,7 @@ public class InboxTool {
     @Tool(description = "删除一条 Inbox 条目")
     public String deleteInboxItem(
             @ToolParam(description = "Inbox 条目的 ID") String id) {
+        toolCallNotifier.emit("删除 Inbox 条目");
         inboxService.delete(id);
         return "🗑️ 已删除";
     }
