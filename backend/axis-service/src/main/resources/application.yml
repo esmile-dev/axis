@@ -2,6 +2,12 @@ server:
   port: 7789
 
 spring:
+  web:
+    error:
+      # Include the exception message in the error body so ResponseStatusException
+      # reasons (e.g. FETCH_FAILED / EXTRACT_FAILED) reach the client.
+      # (Spring Boot 4 moved server.error.* to spring.web.error.*)
+      include-message: always
   application:
     name: axis-backend
 

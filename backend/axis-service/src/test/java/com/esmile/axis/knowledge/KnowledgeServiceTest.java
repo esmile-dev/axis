@@ -6,6 +6,9 @@ import com.esmile.axis.knowledge.dto.KnowledgeItemSummaryView;
 import com.esmile.axis.knowledge.dto.UpdateKnowledgeItemRequest;
 import com.esmile.axis.knowledge.entity.KnowledgeArtifact;
 import com.esmile.axis.knowledge.entity.KnowledgeItem;
+import com.esmile.axis.knowledge.fetch.ArticleExtractor;
+import com.esmile.axis.knowledge.fetch.ArticleExtractor.ExtractedArticle;
+import com.esmile.axis.knowledge.fetch.WebPageFetcher;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +28,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -38,12 +42,16 @@ class KnowledgeServiceTest {
     private KnowledgeItemRepository itemRepository;
     @Mock
     private KnowledgeArtifactRepository artifactRepository;
+    @Mock
+    private WebPageFetcher webPageFetcher;
+    @Mock
+    private ArticleExtractor articleExtractor;
 
     private KnowledgeService service;
 
     @BeforeEach
     void setUp() {
-        service = new KnowledgeService(itemRepository, artifactRepository);
+        service = new KnowledgeService(itemRepository, artifactRepository, webPageFetcher, articleExtractor);
     }
 
     @Test
@@ -77,6 +85,55 @@ class KnowledgeServiceTest {
         assertThat(view.type()).isEqualTo(KnowledgeType.BOOK);
         assertThat(view.sourceUrl()).isEqualTo("https://example.com");
         assertThat(view.tags()).containsExactlyInAnyOrder("a", "b");
+    }
+
+    @Test
+    void createFromUrl_success_savesFetchedArticleAsPending() {
+        when(webPageFetcher.fetch("https://example.com/a")).thenReturn("<html>page</html>");
+        when(articleExtractor.extract("<html>page</html>"))
+                .thenReturn(new ExtractedArticle("抓取标题", "# 正文"));
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        KnowledgeItemDetailView view = service.createFromUrl("https://example.com/a");
+
+        ArgumentCaptor<KnowledgeItem> captor = ArgumentCaptor.forClass(KnowledgeItem.class);
+        verify(itemRepository).saveAndFlush(captor.capture());
+        KnowledgeItem saved = captor.getValue();
+        assertThat(saved.getType()).isEqualTo(KnowledgeType.ARTICLE);
+        assertThat(saved.getTitle()).isEqualTo("抓取标题");
+        assertThat(saved.getContent()).isEqualTo("# 正文");
+        assertThat(saved.getSourceUrl()).isEqualTo("https://example.com/a");
+        assertThat(saved.getSummaryStatus()).isEqualTo(ArtifactStatus.PENDING);
+        assertThat(saved.getMindmapStatus()).isEqualTo(ArtifactStatus.PENDING);
+        assertThat(view.content()).isEqualTo("# 正文");
+    }
+
+    @Test
+    void createFromUrl_fetchFails_propagates422FetchFailed() {
+        when(webPageFetcher.fetch(anyString())).thenThrow(
+                new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "FETCH_FAILED: boom"));
+
+        assertThatThrownBy(() -> service.createFromUrl("https://down.example.com"))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                    assertThat(e.getReason()).contains("FETCH_FAILED");
+                });
+        verifyNoInteractions(articleExtractor);
+        verify(itemRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createFromUrl_extractFails_propagates422ExtractFailed() {
+        when(webPageFetcher.fetch(anyString())).thenReturn("<html></html>");
+        when(articleExtractor.extract(anyString())).thenThrow(
+                new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "EXTRACT_FAILED: empty"));
+
+        assertThatThrownBy(() -> service.createFromUrl("https://example.com"))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                    assertThat(e.getReason()).contains("EXTRACT_FAILED");
+                });
+        verify(itemRepository, never()).saveAndFlush(any());
     }
 
     @Test

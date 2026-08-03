@@ -5,6 +5,9 @@ import com.esmile.axis.knowledge.dto.KnowledgeItemDetailView;
 import com.esmile.axis.knowledge.dto.KnowledgeItemSummaryView;
 import com.esmile.axis.knowledge.dto.UpdateKnowledgeItemRequest;
 import com.esmile.axis.knowledge.entity.KnowledgeItem;
+import com.esmile.axis.knowledge.fetch.ArticleExtractor;
+import com.esmile.axis.knowledge.fetch.ArticleExtractor.ExtractedArticle;
+import com.esmile.axis.knowledge.fetch.WebPageFetcher;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +25,8 @@ public class KnowledgeService {
 
     private final KnowledgeItemRepository itemRepository;
     private final KnowledgeArtifactRepository artifactRepository;
+    private final WebPageFetcher webPageFetcher;
+    private final ArticleExtractor articleExtractor;
 
     @Transactional(readOnly = true)
     public List<KnowledgeItemSummaryView> list(KnowledgeType type, KnowledgeStatus status, String tag, String q) {
@@ -44,6 +49,19 @@ public class KnowledgeService {
                 .content(req.content())
                 .sourceUrl(req.sourceUrl())
                 .tags(req.tags() != null ? new HashSet<>(req.tags()) : new HashSet<>())
+                .build();
+        return KnowledgeItemDetailView.from(itemRepository.saveAndFlush(item), List.of());
+    }
+
+    @Transactional
+    public KnowledgeItemDetailView createFromUrl(String url) {
+        String html = webPageFetcher.fetch(url);
+        ExtractedArticle article = articleExtractor.extract(html);
+        KnowledgeItem item = KnowledgeItem.builder()
+                .type(KnowledgeType.ARTICLE)
+                .title(article.title())
+                .content(article.markdown())
+                .sourceUrl(url)
                 .build();
         return KnowledgeItemDetailView.from(itemRepository.saveAndFlush(item), List.of());
     }
