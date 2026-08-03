@@ -1,8 +1,9 @@
 package com.esmile.axis.ai.tool;
 
 import com.esmile.axis.ai.ToolCallNotifier;
-import com.esmile.axis.entity.KnowledgeDocument;
-import com.esmile.axis.service.KnowledgeService;
+import com.esmile.axis.knowledge.KnowledgeType;
+import com.esmile.axis.knowledge.entity.KnowledgeItem;
+import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -18,7 +19,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class KnowledgeTool {
 
-    private final KnowledgeService knowledgeService;
+    private final KnowledgeItemRepository knowledgeItemRepository;
     private final ToolCallNotifier toolCallNotifier;
 
     @Tool(description = "在知识库中创建一篇新文档")
@@ -26,14 +27,18 @@ public class KnowledgeTool {
             @ToolParam(description = "文档标题") String title,
             @ToolParam(description = "文档内容（Markdown 格式）") String content) {
         toolCallNotifier.emit("创建知识文档");
-        KnowledgeDocument doc = knowledgeService.create(title, content);
-        return String.format("✅ 已创建知识文档：%s (ID: %s)", doc.getTitle(), doc.getId());
+        KnowledgeItem item = knowledgeItemRepository.save(KnowledgeItem.builder()
+                .type(KnowledgeType.NOTE)
+                .title(title)
+                .content(content)
+                .build());
+        return String.format("✅ 已创建知识文档：%s (ID: %s)", item.getTitle(), item.getId());
     }
 
     @Tool(description = "列出知识库中的所有文档")
     public String listDocuments() {
         toolCallNotifier.emit("列出知识文档");
-        List<KnowledgeDocument> docs = knowledgeService.findAll();
+        List<KnowledgeItem> docs = knowledgeItemRepository.findAllByOrderByCreatedAtDesc();
         if (docs.isEmpty()) {
             return "📚 知识库为空";
         }
@@ -46,8 +51,8 @@ public class KnowledgeTool {
     public String searchDocuments(
             @ToolParam(description = "搜索关键词") String keyword) {
         toolCallNotifier.emit("搜索知识库");
-        List<KnowledgeDocument> docs = knowledgeService.findAll();
-        List<KnowledgeDocument> matched = docs.stream()
+        List<KnowledgeItem> docs = knowledgeItemRepository.findAllByOrderByCreatedAtDesc();
+        List<KnowledgeItem> matched = docs.stream()
                 .filter(d -> d.getTitle().toLowerCase().contains(keyword.toLowerCase())
                         || d.getContent().toLowerCase().contains(keyword.toLowerCase()))
                 .toList();

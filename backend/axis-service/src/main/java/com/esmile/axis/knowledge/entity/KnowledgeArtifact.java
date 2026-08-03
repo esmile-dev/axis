@@ -1,5 +1,6 @@
-package com.esmile.axis.entity;
+package com.esmile.axis.knowledge.entity;
 
+import com.esmile.axis.knowledge.ArtifactKind;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -8,23 +9,35 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.Instant;
 
 @Entity
-@Table(name = "knowledge_document")
+@Table(name = "knowledge_artifact",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"item_id", "kind"}))
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class KnowledgeDocument {
+public class KnowledgeArtifact {
 
     @Id
     @Column(length = 30)
     private String id;
 
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "item_id", nullable = false)
+    private KnowledgeItem item;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String title;
+    private ArtifactKind kind;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
+
+    @Column(length = 100)
+    private String model;
+
+    @Column(length = 1000)
+    private String error;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
