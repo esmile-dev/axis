@@ -11,3 +11,34 @@ export interface Issue {
   createdAt: string
   updatedAt: string
 }
+
+export type KnowledgeType = 'ARTICLE' | 'BOOK' | 'PODCAST' | 'VIDEO' | 'TUTORIAL' | 'NOTE'
+export type KnowledgeStatus = 'UNREAD' | 'READING' | 'DONE' | 'ARCHIVED'
+export type ArtifactStatus = 'PENDING' | 'GENERATING' | 'DONE' | 'FAILED'
+
+export interface KnowledgeItemSummary {
+  id: string
+  type: KnowledgeType
+  title: string
+  status: KnowledgeStatus
+  progress: number
+  summaryStatus: ArtifactStatus
+  mindmapStatus: ArtifactStatus
+  tags: string[]
+  sourceUrl: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface KnowledgeArtifact {
+  kind: 'SUMMARY' | 'MINDMAP'
+  content: string
+  model: string | null
+  error: string | null
+  updatedAt: string
+}
+
+export interface KnowledgeItemDetail extends KnowledgeItemSummary {
+  content: string
+  artifacts: KnowledgeArtifact[]
+}

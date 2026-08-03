@@ -56,7 +56,7 @@ function handleCreateProject() {
 }
 
 function handleCreateKnowledge() {
-  navigateTo('/knowledge')
+  navigateTo('/knowledge?add=1')
 }
 </script>
 

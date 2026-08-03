@@ -9,7 +9,7 @@ const commands = [
   { id: 'inbox', label: 'Quick capture to Inbox', icon: Inbox, action: 'capture', color: 'text-blue-500' },
   { id: 'todo', label: 'Create new Todo', icon: CheckSquare, action: 'todo', color: 'text-green-500' },
   { id: 'project', label: 'Create new Project', icon: FolderKanban, action: 'project', color: 'text-indigo-500' },
-  { id: 'knowledge', label: 'Create Knowledge doc', icon: BookOpen, action: 'knowledge', color: 'text-purple-500' },
+  { id: 'knowledge', label: 'Add to Knowledge', icon: BookOpen, action: 'knowledge', color: 'text-purple-500' },
 ]
 
 const filteredCommands = computed(() => {
