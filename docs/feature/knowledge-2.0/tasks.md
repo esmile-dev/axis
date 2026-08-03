@@ -23,7 +23,7 @@ created: 2026-08-03
 | ☑ | T-005 | 异步生成管线：事件+@Async+两产物状态机+regenerate 端点+总结/脑图 prompt 初版 | FR-004, NFR-001 | 入库后产物自动 DONE；注入 LLM 故障 → FAILED → regenerate 恢复 | 4ce2729 |
 | ☑ | T-006 | 评测：`evals/summary-golden.jsonl`（≥10 篇）+ 脑图合法性校验 + 评测入口，跑出达标结果 | NFR-003/004 | 评测实测达阈值，结果填入验收记录 | cf1b1fd |
 | ☑ | T-007 | from-inbox 端点：URL/文字两分支 + inbox 标已读 + 单测 | FR-008 | 两类条目转入成功且原条目 readAt 非空 | 0004913 |
-| ☐ | T-008 | 前端骨架：`pages/knowledge/` 三栏布局 + 左导航筛选 + 列表 + 添加 Dialog（三 tab）+ ⌘K 命令 | FR-001/002/003/005 | 页面可用，筛选搜索添加全通；旧 knowledge.vue 删除 | |
+| ☑ | T-008 | 前端骨架：`pages/knowledge/` 三栏布局 + 左导航筛选 + 列表 + 添加 Dialog（三 tab）+ ⌘K 命令 | FR-001/002/003/005 | 页面可用，筛选搜索添加全通；旧 knowledge.vue 删除 | 3681752 |
 | ☐ | T-009 | 详情三视图：原文渲染/总结/markmap 脑图（含大纲切换、骨架屏、失败重试） | FR-006 | 三 tab 正常；脑图可交互；失败态可重试 | |
 | ☐ | T-010 | 状态切换 + 滚动进度自动记录与恢复 + 标签编辑 + Inbox「转入知识库」入口 | FR-007/008 | 状态/进度持久化；Inbox 转入全链路通 | |
 | ☐ | T-011 | P2 问答：`/api/knowledge/{id}/chat` SSE + 详情页问答面板 + qa-golden 评测 | FR-009, NFR-005 | 流式问答可用、历史持久化；评测达标 | |
