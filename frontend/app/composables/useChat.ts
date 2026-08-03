@@ -98,6 +98,8 @@ export function useChat() {
     if (!activeId.value) {
       activeId.value = crypto.randomUUID()
     }
+    // 新会话：后端会在首轮结束后异步用 LLM 生成语义标题，需要延迟再刷一次列表
+    const isNewConversation = !conversations.value.some(c => c.id === activeId.value)
 
     messages.value.push({ id: crypto.randomUUID(), role: 'user', content, toolCalls: [] })
     // 用 reactive 包装，后续流式增量修改才能触发视图更新
@@ -159,6 +161,10 @@ export function useChat() {
       sending.value = false
       // 刷新会话列表（新会话落库 / 标题与排序更新）
       await loadConversations()
+      if (isNewConversation) {
+        // 等后端异步 LLM 标题落库后再刷一次（截断兜底 → 语义标题）
+        setTimeout(() => loadConversations(), 3000)
+      }
     }
   }
 

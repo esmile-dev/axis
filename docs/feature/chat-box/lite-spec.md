@@ -28,7 +28,7 @@ AI Agent 已有 `/api/agent/chat`（SSE + Tool Calling），但前端没有任�
 ## 2. 方案要点
 
 - 后端仅改 `AgentController.chat()`：SSE 帧由纯文本改为结构化 JSON——`{"type":"token","text"}` / `{"type":"tool","label"}` / `{"type":"done"}`；新增 `ToolCallNotifier`（单用户、单并发对话前提，`Sinks.Many` 持有当前请求 sink；无 sink 时 emit 空操作，不影响 `/expand`、digest 共用 Tool 的路径）；4 个 Tool 类 13 个方法首行插桩 `emit(中文动作描述)`。
-- 持久化（2026-07-26 追加）：新表 `chat_conversation`（id 由前端 UUID 生成、title 取首条用户消息截断 30 字）、`chat_message`（conversationId + seq 排序）、`chat_long_memory`；`JpaChatMemoryRepository`（实现 Spring AI `ChatMemoryRepository`，saveAll 全量替换窗口内容、仅落 USER/ASSISTANT）替代 `InMemoryChatMemoryRepository`——短期记忆 = chat_message 滑动窗口（100 条），重启不丢；历史展示与记忆共用一表，窗口外旧消息被裁剪。
+- 持久化（2026-07-26 追加）：新表 `chat_conversation`（id 由前端 UUID 生成、title 先取首条用户消息截断 30 字兜底，首轮结束后异步 LLM 生成语义标题覆盖）、`chat_message`（conversationId + seq 排序）、`chat_long_memory`；`JpaChatMemoryRepository`（实现 Spring AI `ChatMemoryRepository`，saveAll 全量替换窗口内容、仅落 USER/ASSISTANT）替代 `InMemoryChatMemoryRepository`——短期记忆 = chat_message 滑动窗口（100 条），重启不丢；历史展示与记忆共用一表，窗口外旧消息被裁剪。
 - 长期记忆：`MemoryTool`（saveMemory/listMemories/deleteMemory）+ 每次请求将记忆（≤50 条）注入 system prompt。**Prompt 与工具契约变更**（§7.2）：system prompt 增加记忆能力说明，chat/chatSync 工具列表新增 memoryTool。
 - 新端点：`GET/DELETE /api/agent/conversations[/{id}]`、`GET /api/agent/conversations/{id}/messages`、`GET/DELETE /api/agent/memories[/{id}]`（ChatHistoryController，axis-service）。
 - 前端新增 `useChat` composable（fetch + ReadableStream 解析 SSE，`$fetch` 不支持流式）与 `/chat` 页面（左栏会话列表 + 右栏聊天区 + 记忆管理 Dialog）；消息与会话以后端为准，不再用 localStorage。
@@ -60,3 +60,4 @@ AI Agent 已有 `/api/agent/chat`（SSE + Tool Calling），但前端没有任�
 | 2026-07-26 | 危险工具操作（删除等）暂无前端确认节点 | workflow §7.3 要求不可逆操作需人确认；本期豁免——工具层沿用既有自动执行行为，确认 UX 后续单独 M 级处理 |
 | 2026-07-26 | 增加会话历史 + 短/长期记忆（FR-007~010）；system prompt 与工具列表变更 | 用户需求；prompt/工具契约变更按 §7.2 随本 M 级一并确认 |
 | 2026-07-26 | 历史展示与短期记忆共用 chat_message 表，窗口（100 条）外旧消息被裁剪 | 避免双表同步复杂度；单用户场景 100 条/会话足够 |
+| 2026-08-03 | 会话标题改为「截断兜底 + LLM 异步升级」：首轮结束后 `@Async` 生成语义标题覆盖截断标题，失败静默保留兜底；前端新会话发送后延迟 3s 再刷一次列表 | 截断标题无语义；同步生成会拖慢首条回复，故异步；prompt 契约新增标题生成 prompt（§7.2 随本 M 级确认）；评测入口 `TitleGenerationEval`（golden 15 条，长度通过率阈值 0.9，无 AI key 自动跳过） |

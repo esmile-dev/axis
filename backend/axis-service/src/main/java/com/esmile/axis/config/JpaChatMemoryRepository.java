@@ -98,14 +98,16 @@ public class JpaChatMemoryRepository implements ChatMemoryRepository {
         }
     }
 
-    /** 用首条用户消息作为会话标题 */
+    /** 用首条用户消息作为会话标题（LLM 语义标题生成前的截断兜底，按 code point 截断避免切乱 emoji） */
     private String deriveTitle(List<Message> messages) {
         return messages.stream()
                 .filter(m -> m.getMessageType() == MessageType.USER)
                 .map(Message::getText)
                 .filter(t -> t != null && !t.isBlank())
                 .findFirst()
-                .map(t -> t.length() <= TITLE_MAX ? t : t.substring(0, TITLE_MAX) + "…")
+                .map(t -> t.codePoints().count() <= TITLE_MAX
+                        ? t
+                        : t.substring(0, t.offsetByCodePoints(0, TITLE_MAX)) + "…")
                 .orElse("新会话");
     }
 }

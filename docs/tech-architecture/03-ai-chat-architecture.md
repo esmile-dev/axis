@@ -76,7 +76,7 @@ Sinks.Many<ChatEvent> toolEvents = toolCallNotifier.begin();
 Flux<ChatEvent> tokenFlux = chatClient().prompt()
         .system(systemPrompt()).user(message)
         .advisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-        .advisors(spec -> spec.param("chat_memory_conversation_id", sessionId))
+        .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, sessionId))
         .tools(inboxTool, issueTool, projectTool, knowledgeTool, memoryTool)
         .stream().content()
         .<ChatEvent>map(ChatEvent.Token::new)
@@ -138,7 +138,7 @@ public class InboxTool {
 2. **返回值是给模型看的自然语言，不是给程序解析的 JSON**。返回 `✅ 已创建 Inbox 条目：xxx (ID: 9)` 而不是 `{"id":9}`——模型会把 ID 用在后续操作里（「把刚才那条标记完成」→ 模型从上下文拿到 ID 调 `markInboxDone`）。返回 ID 是关键，否则连续操作会断链。
 3. **Tool 直接注入业务 Service 层**（InboxService、IssueService……），不做任何绕过。业务校验、实体状态检查全部复用既有分层——Agent 只是一个新的「调用方」，不是新的「业务层」。
 
-五个 Tool 的分工：`InboxTool`（4 方法）、`IssueTool`（5 方法）、`ProjectTool`（3 方法）、`KnowledgeTool`（3 方法）、`MemoryTool`（3 方法，见 §4.3）。
+五个 Tool 的分工：`InboxTool`（4 方法）、`IssueTool`（5 方法）、`ProjectTool`（3 方法）、`KnowledgeTool`（3 方法）、`MemoryTool`（3 方法，见 §4.4）。
 
 ---
 
@@ -167,17 +167,43 @@ LLM 调用
 
 配置（`backend/axis-agent/.../config/AiConfig.java:17-22`）：`MessageWindowChatMemory`（`maxMessages=100`）+ 自定义 `JpaChatMemoryRepository`。
 
-**会话隔离**：`.advisors(spec -> spec.param("chat_memory_conversation_id", sessionId))`（`AgentService.chat()`）——conversationId 不从请求体猜，而是显式传进 advisor 上下文。sessionId 由前端 `crypto.randomUUID()` 生成（`useChat.ts:79,99`），前后端零协商成本。
+**会话隔离**：`.advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, sessionId))`（`AgentService.chat()`）——conversationId 不从请求体猜，而是显式传进 advisor 上下文。key 必须用框架常量 `ChatMemory.CONVERSATION_ID`（值是 `"chat_memory_conversation_id"`，advisor 内部按此 key 读取）：手写字面量拼错了编译器不报错，运行时会静默退回默认会话 `"default"`，所有会话历史混一起。sessionId 由前端 `crypto.randomUUID()` 生成（`useChat.ts:79,99`），前后端零协商成本。
 
 **持久化实现**（`backend/axis-service/.../config/JpaChatMemoryRepository.java`）的三个关键语义：
 
-1. **全量替换**：`MessageWindowChatMemory` 每次 `saveAll` 传入的是**裁剪后的完整窗口**，所以 `saveAll()` 先 `deleteByConversationId` 再全量插入（`:52-71`）。窗口外的旧消息随之被物理删除——「历史展示」和「模型记忆」共用一张表，前端看到的会话历史就是模型实际看到的内容，两者永远不会不一致。
+1. **全量替换**：`MessageWindowChatMemory` 每次 `saveAll` 传入的是**裁剪后的完整窗口**（不是增量），所以 `saveAll()` 先 `deleteByConversationId` 再全量插入（`:52-71`）——追加式写入会导致重复堆积、被淘汰的旧消息永远删不掉。顺带地，`seq` 是窗口内序号，窗口滑动后位置全部前移，全量重写也免去了逐条 diff 和重排。方法级 `@Transactional` 保证「删 + 插」原子，不会出现「删完了插入挂了、历史凭空消失」的中间态。窗口外的旧消息随之被物理删除——「历史展示」和「模型记忆」共用一张表，前端看到的会话历史就是模型实际看到的内容，两者永远不会不一致。
 2. **只落 USER/ASSISTANT**：SYSTEM/TOOL 中间消息不落库（`:59-61`）。工具调用的中间态回放给模型没有价值（还会消耗 token），回放时还原成纯文本对话（`toSpringMessage`，`:80-86`）。
-3. **顺带维护会话元数据**：`saveAll` 里 `upsertConversation`（`:88-99`）——首次用首条用户消息截 30 字当标题，之后刷 `updatedAt` 让会话列表按最近活跃排序。
+3. **顺带维护会话元数据**：`saveAll` 里 `upsertConversation`（`:88-99`）——首次用首条用户消息截 30 字（code point 截断，避免切乱 emoji）当**兜底标题**，之后刷 `updatedAt` 让会话列表按最近活跃排序。首轮对话结束后 `ChatHistoryService.generateAndUpgradeTitle()`（`@Async`）用 LLM 生成语义标题覆盖兜底，失败静默保留截断版——用户立刻有标题，体验只升不降。
 
 对比默认的 `InMemoryChatMemoryRepository`：重启即丢、无法支撑前端历史页。实现 `ChatMemoryRepository` 这个 SPI 换 JPA 是标准扩展点，成本约 100 行。
 
-### 4.3 长期记忆：Tool 主动写入 + prompt 注入
+### 4.3 四种消息类型：一轮对话产生五条消息，落库的只有两条
+
+Spring AI 的 `MessageType` 有四种（对应 OpenAI 的 role）：**SYSTEM / USER / ASSISTANT / TOOL**。一次带工具调用的对话（「帮我记下：下周看看 Nuxt 4」），内部实际产生五条消息：
+
+```
+[SYSTEM]    基础 prompt + 长期记忆（每次请求现拼，不落库）
+[USER]      用户输入                                              → 落库
+[ASSISTANT] 工具调用决策（文本为空，携带 tool name + 参数 JSON）     → 不落库
+[TOOL]      Tool 方法返回值字符串（ToolResponseMessage）            → 不落库
+[ASSISTANT] 基于工具结果的最终回复                                   → 落库
+```
+
+落库闸门是 `JpaChatMemoryRepository.saveAll()` 里那个 `continue`（`:59-61`）：`type != USER && type != ASSISTANT` 就跳过。回放侧镜像：`toSpringMessage`（`:80-86`）只认两种 role，其余 `Optional.empty()` 滤掉。注意落库时 ASSISTANT 也只存 `getText()` 纯文本——tool_calls 元数据本身被丢弃，回放出来的历史是干净的「一问一答」，不存在半截的工具调用对。
+
+**TOOL 消息为什么不该存**（判断标准：这条结果是「状态快照」还是「不可再生内容」）：
+
+1. **五个 Tool 全是 PG 的 CRUD，结果随时可重查**。快照从写入那一刻起就在腐坏——把过期的 issue 列表喂给模型，它可能引用旧状态而不去重查，是负资产。模型需要时再调一次 list 工具，拿到的才是最新数据。
+2. **有价值的残渣已留在 ASSISTANT 文本里**（「已创建 Issue：xxx (ID: …)」）——信息没丢，丢的只是中间过程。工具消息是「过程的脚手架」，对话文本是「拆完脚手架的建筑」。
+3. **API 配对约束**：OpenAI 兼容接口要求 tool 消息和 assistant 的 tool_calls 按 id 严格成对。要存就得连 tool_call_id、参数 JSON 一起存——`chat_message` 表结构（role/content/seq）表达不了，半吊子持久化回放时直接 400。
+4. **token 成本**：窗口内容每轮重发，工具结果是「写一次、以后每轮白交钱」，直到被挤出窗口。
+5. **真想留的有专属通道**：跨会话值得记的信息由 MemoryTool 主动甄别写入（§4.4）；自动落库所有工具结果是无差别囤积，与「长期记忆要精选」的哲学冲突。
+
+配套约定：**Tool 返回值刻意紧凑**——写操作返回一行确认、列表逐行文本、`searchDocuments` 内容截断前 100 字，绝不返回完整实体 JSON。单条 TOOL 消息因此维持在几十字节~几 KB。如果未来加了返回大 payload 的工具（读文档全文、抓网页总结），更要坚持不落库，并让工具把不可再生结果写进知识库/Inbox，而不是留在上下文里。
+
+审计/排障/前端展示「当时调了什么」是**日志需求，不是记忆需求**——要做就单独建 tool_call 记录表（谁、何时、参数、结果、耗时），绝不混进 `chat_message`：一张表给模型当上下文，一张表给人当历史，两个目的不能合并。
+
+### 4.4 长期记忆：Tool 主动写入 + prompt 注入
 
 设计上有意思的地方在于：**写入时机由 Agent 自己决策，而不是规则代码**。
 
@@ -187,7 +213,7 @@ LLM 调用
 
 为什么走 prompt 注入而不是塞进对话历史？因为长期记忆是**系统级上下文**（「你是谁、用户是谁」），不是对话内容；放 system prompt 里模型权重最高，也不会被滑动窗口挤掉。
 
-### 4.4 记忆方案对比（面试必问：为什么不用 XX）
+### 4.5 记忆方案对比（面试必问：为什么不用 XX）
 
 | 方案 | 机制 | 优点 | 缺点 | 本项目 |
 |---|---|---|---|---|
@@ -228,7 +254,8 @@ API key 加密存储、掩码返回、401 排查的完整链路见 `02-ai-config
 | SSE 结构化帧 | token/tool/done 三类 JSON 帧，工具调用对前端可见 | `AgentController.toSse()`、`ChatEvent.java` |
 | Reactor 双流合并 | token 流（Spring AI）+ tool 事件流（Sinks.Many）`Flux.merge`，`doFinally` 清理 | `AgentService.chat()`、`ToolCallNotifier.java` |
 | Advisor 机制 | ChatClient 的 AOP：请求前注入历史、请求后持久化 | `AgentService.chat()` |
-| 会话隔离 | conversationId 走 advisor 参数，前端 UUID 生成 | `useChat.ts:79,99` |
+| 会话隔离 | conversationId 走 advisor 参数（key 用框架常量 `ChatMemory.CONVERSATION_ID`，别手写字面量），前端 UUID 生成 | `useChat.ts:79,99` |
+| 消息类型与落库 | 四种 MessageType；一轮工具调用产生 5 条消息、只落 USER/ASSISTANT 两条；TOOL 是可重查的状态快照，进记忆窗口是负资产 | `JpaChatMemoryRepository.java:59-61` |
 | 短期记忆 | `MessageWindowChatMemory`(100) + JPA 版 `ChatMemoryRepository`，saveAll 全量替换、只存 USER/ASSISTANT | `JpaChatMemoryRepository.java:52-71` |
 | 长期记忆 | Agent 经 MemoryTool 主动写入 + 每次请求 system prompt 注入（≤50 条） | `AgentService.systemPrompt()`、`MemoryTool.java` |
 | Tool Calling | `@Tool` 注解生成 schema，框架反射调用，自然语言返回值回填（返回 ID 支撑连续操作） | `InboxTool.java:24-30` |

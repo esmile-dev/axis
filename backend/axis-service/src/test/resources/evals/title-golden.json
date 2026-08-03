@@ -1,0 +1,17 @@
+[
+  {"message": "帮我把 inbox 里关于 RAG 的想法整理成一个 issue"},
+  {"message": "Spring AI 的 Advisor 机制是怎么工作的？给我讲讲"},
+  {"message": "今天看到一篇关于 LLM Agent 记忆系统的文章，帮我记一下要点"},
+  {"message": "把 Axis 项目的 digest 功能改成每天早 8 点推送"},
+  {"message": "帮我创建一个项目，名字叫「面试准备」，优先级高一点"},
+  {"message": "PostgreSQL 的 ddl-auto update 在生产环境有什么风险？"},
+  {"message": "总结一下我这周在知识库里新增的几篇文档"},
+  {"message": "Write a bash script that watches a directory and syncs new files to S3"},
+  {"message": "Vue 3 的 reactive 和 ref 到底什么时候用哪个"},
+  {"message": "帮我把「读《凤凰项目》第三章」加到今天的待办里"},
+  {"message": "😀 哈哈今天心情不错，随便聊聊"},
+  {"message": "分析一下为什么我们的 SSE 流偶尔会在工具调用后卡住不动"},
+  {"message": "k8s 里 liveness probe 和 readiness probe 的区别是什么，配错了会怎样"},
+  {"message": "记住：我做后端十年了，回答时不用解释基础概念"},
+  {"message": "下周一要和技术总监过一遍 Axis 的架构，帮我列一下可能被挑战的点"}
+]

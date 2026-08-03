@@ -40,6 +40,7 @@ public class AgentService {
      * 产出 {@link ChatEvent} 序列，尾部带 {@link ChatEvent.Done}。
      */
     public Flux<ChatEvent> chat(String message, String sessionId) {
+        boolean newConversation = !chatHistoryService.conversationExists(sessionId);
         Sinks.Many<ChatEvent> toolEvents = toolCallNotifier.begin();
 
         Flux<ChatEvent> tokenFlux = chatClient().prompt()
@@ -52,14 +53,21 @@ public class AgentService {
                 .content()
                 .<ChatEvent>map(ChatEvent.Token::new)
                 .concatWith(Flux.just(new ChatEvent.Done()))
-                .doFinally(signalType -> toolCallNotifier.end());
+                .doFinally(signalType -> {
+                    toolCallNotifier.end();
+                    // 新会话：首轮结束后异步用 LLM 生成语义标题（覆盖截断兜底，失败静默）
+                    if (newConversation) {
+                        chatHistoryService.generateAndUpgradeTitle(sessionId, message);
+                    }
+                });
 
         return Flux.merge(tokenFlux, toolEvents.asFlux());
     }
 
     /** 非流式对话：与 {@link #chat} 同一套编排，改走 {@code .call()} */
     public String chatSync(String message, String sessionId) {
-        return chatClient().prompt()
+        boolean newConversation = !chatHistoryService.conversationExists(sessionId);
+        String content = chatClient().prompt()
                 .system(systemPrompt())
                 .user(message)
                 .advisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
@@ -67,6 +75,10 @@ public class AgentService {
                 .tools(inboxTool, issueTool, projectTool, knowledgeTool, memoryTool)
                 .call()
                 .content();
+        if (newConversation) {
+            chatHistoryService.generateAndUpgradeTitle(sessionId, message);
+        }
+        return content;
     }
 
     /** PRD 扩写：纯文本流，可搜索知识库获取上下文 */
