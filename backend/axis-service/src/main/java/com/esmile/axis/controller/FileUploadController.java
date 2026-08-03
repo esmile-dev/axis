@@ -1,7 +1,6 @@
 package com.esmile.axis.controller;
 
 import com.esmile.axis.service.FileUploadService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -17,13 +16,16 @@ import java.nio.file.Paths;
 import java.util.Map;
 
 @RestController
-@RequiredArgsConstructor
 public class FileUploadController {
 
     private final FileUploadService fileUploadService;
+    private final Path uploadDir;
 
-    @Value("${app.upload.dir}")
-    private String uploadDir;
+    public FileUploadController(FileUploadService fileUploadService,
+                                @Value("${app.upload.dir}") String uploadDir) {
+        this.fileUploadService = fileUploadService;
+        this.uploadDir = Paths.get(uploadDir).normalize();
+    }
 
     @PostMapping("/api/upload")
     public Map<String, String> upload(@RequestParam("file") MultipartFile file) throws IOException {
@@ -33,7 +35,11 @@ public class FileUploadController {
 
     @GetMapping("/api/uploads/{filename}")
     public ResponseEntity<Resource> serveFile(@PathVariable String filename) throws MalformedURLException {
-        Path filePath = Paths.get(uploadDir).resolve(filename);
+        // 防路径穿越：resolve 后必须仍落在 uploadDir 内
+        Path filePath = uploadDir.resolve(filename).normalize();
+        if (!filePath.startsWith(uploadDir)) {
+            return ResponseEntity.badRequest().build();
+        }
         Resource resource = new UrlResource(filePath.toUri());
 
         if (!resource.exists()) {
