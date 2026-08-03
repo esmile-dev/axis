@@ -1,13 +1,10 @@
 package com.esmile.axis.config;
 
 import com.esmile.axis.entity.AiConfigProfile;
-import com.esmile.axis.entity.AppConfig;
 import com.esmile.axis.repository.AiConfigProfileRepository;
-import com.esmile.axis.repository.AppConfigRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.encrypt.Encryptors;
@@ -24,7 +21,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link AiConfigService}: DB-first loading, env fallback, reload
- * swap, encryption, profile CRUD, activation, and legacy migration.
+ * swap, encryption, profile CRUD, and activation.
  */
 @ExtendWith(MockitoExtension.class)
 class AiConfigServiceTest {
@@ -38,14 +35,11 @@ class AiConfigServiceTest {
     @Mock
     private AiConfigProfileRepository profileRepository;
 
-    @Mock
-    private AppConfigRepository legacyConfigRepository;
-
     private AiConfigService service;
 
     @BeforeEach
     void setUp() {
-        service = new AiConfigService(profileRepository, legacyConfigRepository);
+        service = new AiConfigService(profileRepository);
         ReflectionTestUtils.setField(service, "encryptionPassword", PASSWORD);
         ReflectionTestUtils.setField(service, "encryptionSalt", SALT);
         ReflectionTestUtils.setField(service, "envApiKey", ENV_KEY);
@@ -68,32 +62,8 @@ class AiConfigServiceTest {
     }
 
     @Test
-    void load_noActiveProfileButLegacyKeys_migratesToProfile() {
-        TextEncryptor enc = Encryptors.delux(PASSWORD, SALT);
-        String ciphertext = enc.encrypt("legacy-key");
+    void load_noActiveProfile_usesEnv() {
         when(profileRepository.findByActiveTrue()).thenReturn(Optional.empty());
-        when(legacyConfigRepository.findById("ai.api_key")).thenReturn(Optional.of(
-                AppConfig.builder().key("ai.api_key").value(ciphertext).encrypted(true).build()));
-        when(legacyConfigRepository.findById("ai.endpoint")).thenReturn(Optional.of(
-                AppConfig.builder().key("ai.endpoint").value("https://legacy.example.com").encrypted(false).build()));
-        when(legacyConfigRepository.findById("ai.model")).thenReturn(Optional.of(
-                AppConfig.builder().key("ai.model").value("legacy-model").encrypted(false).build()));
-        when(profileRepository.save(any(AiConfigProfile.class))).thenAnswer(i -> i.getArgument(0));
-
-        service.load();
-
-        assertThat(service.getConfig().source()).isEqualTo("db");
-        assertThat(service.getConfig().apiKey()).isEqualTo("legacy-key");
-        assertThat(service.getConfig().model()).isEqualTo("legacy-model");
-        verify(legacyConfigRepository).deleteById("ai.api_key");
-        verify(legacyConfigRepository).deleteById("ai.endpoint");
-        verify(legacyConfigRepository).deleteById("ai.model");
-    }
-
-    @Test
-    void load_emptyDbAndNoLegacy_usesEnv() {
-        when(profileRepository.findByActiveTrue()).thenReturn(Optional.empty());
-        when(legacyConfigRepository.findById("ai.api_key")).thenReturn(Optional.empty());
 
         service.load();
 
@@ -184,22 +154,6 @@ class AiConfigServiceTest {
 
         assertThat(current.isActive()).isFalse();
         assertThat(next.isActive()).isTrue();
-    }
-
-    @Test
-    void save_legacyCompat_updatesActiveProfile() {
-        AiConfigProfile active = activeProfile("old", "https://old.com", "old");
-        active.setId("p1");
-        when(profileRepository.findByActiveTrue()).thenReturn(Optional.of(active));
-        when(profileRepository.findById("p1")).thenReturn(Optional.of(active));
-        when(profileRepository.save(any(AiConfigProfile.class))).thenAnswer(i -> i.getArgument(0));
-
-        service.save("plain-key", "https://saved.com", "gpt-4o-mini");
-
-        ArgumentCaptor<AiConfigProfile> captor = ArgumentCaptor.forClass(AiConfigProfile.class);
-        verify(profileRepository).save(captor.capture());
-        assertThat(captor.getValue().getEndpoint()).isEqualTo("https://saved.com");
-        assertThat(captor.getValue().getApiKey()).isNotEqualTo("plain-key");
     }
 
     @Test

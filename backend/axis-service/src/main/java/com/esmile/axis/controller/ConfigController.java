@@ -9,17 +9,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * AI provider configuration endpoints.
- *
- * <p>The flat {@code /api/v1/config/ai} endpoints remain for backward
- * compatibility and operate on the currently active profile. Profile management
- * is available under {@code /api/v1/config/ai/profiles}.
+ * AI provider configuration: profile management under
+ * {@code /api/v1/config/ai/profiles}, plus a manual {@code /reload} that
+ * rebuilds the active profile's {@code ChatClient}.
  */
 @Slf4j
 @RestController
@@ -29,64 +26,12 @@ public class ConfigController {
 
     private final AiConfigService aiConfigService;
 
-    // ---------- legacy active-config endpoints ----------
-
-    @GetMapping
-    public ResponseEntity<Map<String, Object>> getConfig() {
-        var cfg = aiConfigService.getConfig();
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("id", cfg.id());
-        body.put("name", cfg.name());
-        body.put("apiKey", cfg.maskedApiKey());
-        body.put("endpoint", cfg.endpoint());
-        body.put("model", cfg.model());
-        body.put("source", cfg.source());
-        return ResponseEntity.ok(body);
-    }
-
-    @PutMapping
-    public ResponseEntity<Map<String, Object>> updateConfig(@Valid @RequestBody AiConfigRequest req) {
-        aiConfigService.save(req.apiKey(), req.endpoint(), req.model());
-        var cfg = aiConfigService.getConfig();
-        log.info("AI config updated via legacy settings UI (model={}, endpoint={}, source=db)", req.model(), req.endpoint());
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "AI configuration saved",
-                "source", "db",
-                "id", cfg.id()
-        ));
-    }
-
     @PostMapping("/reload")
-    public ResponseEntity<Map<String, Object>> reload() {
+    public ResponseEntity<ReloadResponse> reload() {
         aiConfigService.reload();
         var cfg = aiConfigService.getConfig();
         log.info("AI config reloaded on demand (source={})", cfg.source());
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "AI configuration reloaded",
-                "source", cfg.source(),
-                "id", cfg.id()
-        ));
-    }
-
-    @PostMapping("/test")
-    public ResponseEntity<Map<String, Object>> testConnection() {
-        String error = aiConfigService.testConnection();
-        if (error == null) {
-            var cfg = aiConfigService.getConfig();
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Connection OK",
-                    "model", cfg.model(),
-                    "id", cfg.id()
-            ));
-        }
-        log.warn("AI connection test failed: {}", error);
-        return ResponseEntity.ok(Map.of(
-                "success", false,
-                "message", error
-        ));
+        return ResponseEntity.ok(new ReloadResponse(true, "AI configuration reloaded", cfg.source(), cfg.id()));
     }
 
     // ---------- profile management endpoints ----------
@@ -157,11 +102,7 @@ public class ConfigController {
 
     // ---------- DTOs ----------
 
-    public record AiConfigRequest(
-            @NotBlank String apiKey,
-            @NotBlank String endpoint,
-            @NotBlank String model
-    ) {
+    public record ReloadResponse(boolean success, String message, String source, String id) {
     }
 
     public record CreateProfileRequest(

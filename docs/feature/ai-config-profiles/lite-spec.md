@@ -70,3 +70,4 @@ created: 2026-07-24
 | 日期 | 变更内容 | 原因 |
 |------|----------|------|
 | 2026-07-24 | 初稿 | AI 提议 M 级，待用户确认 |
+| 2026-07-26 | 删除 legacy 兼容层：flat `GET/PUT /api/v1/config/ai`、`/test` 端点，`AiConfigService.save()/testConnection()`，`app_config` 迁移逻辑及 `AppConfig` 实体/Repository；`/reload` 保留并改为 record 响应 | 项目未发布、无外部调用方，兼容层是纯负担；用户确认全删（S 级）。FR-004 迁移已完成使命（旧数据已迁入 profile），任务表「保留原接口兼容」一项随之作废 |

@@ -1,9 +1,7 @@
 package com.esmile.axis.config;
 
 import com.esmile.axis.entity.AiConfigProfile;
-import com.esmile.axis.entity.AppConfig;
 import com.esmile.axis.repository.AiConfigProfileRepository;
-import com.esmile.axis.repository.AppConfigRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,10 +23,7 @@ import java.util.UUID;
  * the active profile builds the global {@link ChatClient} used by both Daily
  * Digest and the chat agent.
  *
- * <p><b>Startup order</b>: active DB profile → legacy {@code app_config}
- * migration → env vars fallback. Legacy flat keys ({@code ai.api_key} /
- * {@code ai.endpoint} / {@code ai.model}) from Digest 2.0 are migrated into a
- * single active profile on first boot.
+ * <p><b>Startup order</b>: active DB profile → env vars fallback.
  *
  * <p>{@link #reload()} swaps the active {@code ChatClient} atomically so other
  * threads never see a half-constructed client.
@@ -42,7 +37,6 @@ import java.util.UUID;
 public class AiConfigService {
 
     private final AiConfigProfileRepository profileRepository;
-    private final AppConfigRepository legacyConfigRepository;
 
     @Value("${AXIS_ENCRYPTION_PASSWORD:dev-only-do-not-use-in-prod}")
     private String encryptionPassword;
@@ -186,73 +180,21 @@ public class AiConfigService {
     public String testProfile(String id) {
         AiConfigProfile profile = profileRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found: " + id));
-        return testClient(buildClient(toResolvedConfig(profile, "db")));
-    }
-
-    /** Legacy compatibility: save/update the active profile (or create one if none). */
-    @Transactional
-    public synchronized void save(String apiKey, String endpoint, String model) {
-        Optional<AiConfigProfile> active = profileRepository.findByActiveTrue();
-        if (active.isPresent()) {
-            updateProfile(active.get().getId(), active.get().getName(), apiKey, endpoint, model);
-        } else {
-            createProfile("Default", apiKey, endpoint, model);
-        }
-    }
-
-    /** Legacy compatibility: test the active client. */
-    public String testConnection() {
-        return testClient(currentClient);
+        return testClient(buildClient(toResolvedConfig(profile)));
     }
 
     // ---------- internals ----------
 
     private ResolvedConfig loadFromDb() {
         Optional<AiConfigProfile> active = profileRepository.findByActiveTrue();
-        if (active.isPresent()) {
-            try {
-                return toResolvedConfig(active.get(), "db");
-            } catch (Exception e) {
-                log.error("Failed to decrypt active AI profile {}; falling back to env. Check AXIS_ENCRYPTION_PASSWORD/SALT: {}",
-                        active.get().getId(), e.toString());
-                return null;
-            }
+        if (active.isEmpty()) {
+            return null;
         }
-        AiConfigProfile migrated = migrateLegacyConfig();
-        if (migrated != null) {
-            return toResolvedConfig(migrated, "db");
-        }
-        return null;
-    }
-
-    private AiConfigProfile migrateLegacyConfig() {
-        Optional<AppConfig> key = legacyConfigRepository.findById("ai.api_key");
-        if (key.isEmpty()) return null;
         try {
-            String apiKey = decrypt(key.get().getValue());
-            String endpoint = legacyConfigRepository.findById("ai.endpoint")
-                    .map(AppConfig::getValue)
-                    .orElse(envBaseUrl);
-            String model = legacyConfigRepository.findById("ai.model")
-                    .map(AppConfig::getValue)
-                    .orElse(envModel);
-            AiConfigProfile profile = AiConfigProfile.builder()
-                    .id(UUID.randomUUID().toString())
-                    .name("Default")
-                    .apiKey(encrypt(apiKey))
-                    .endpoint(endpoint)
-                    .model(model)
-                    .active(true)
-                    .build();
-            AiConfigProfile saved = profileRepository.save(profile);
-            // clean up legacy keys so migration only happens once
-            legacyConfigRepository.deleteById("ai.api_key");
-            legacyConfigRepository.deleteById("ai.endpoint");
-            legacyConfigRepository.deleteById("ai.model");
-            log.info("Migrated legacy AI config into profile {} (model={})", saved.getId(), model);
-            return saved;
+            return toResolvedConfig(active.get());
         } catch (Exception e) {
-            log.error("Failed to migrate legacy AI config: {}", e.toString());
+            log.error("Failed to decrypt active AI profile {}; falling back to env. Check AXIS_ENCRYPTION_PASSWORD/SALT: {}",
+                    active.get().getId(), e.toString());
             return null;
         }
     }
@@ -261,17 +203,18 @@ public class AiConfigService {
         return new ResolvedConfig(null, "env-fallback", envApiKey, envBaseUrl, envModel, "env");
     }
 
-    private ResolvedConfig toResolvedConfig(AiConfigProfile profile, String source) {
+    private ResolvedConfig toResolvedConfig(AiConfigProfile profile) {
         return new ResolvedConfig(profile.getId(), profile.getName(), decrypt(profile.getApiKey()),
-                profile.getEndpoint(), profile.getModel(), source);
+                profile.getEndpoint(), profile.getModel(), "db");
     }
 
     private ChatClient buildClient(ResolvedConfig cfg) {
+        // No temperature: null is omitted from the request, so each provider's
+        // default applies. Kimi coding models reject any value other than 1.
         OpenAiChatOptions chatOpts = OpenAiChatOptions.builder()
                 .apiKey(cfg.apiKey())
                 .baseUrl(cfg.endpoint())
                 .model(cfg.model())
-                .temperature(0.7)
                 .build();
         OpenAiChatModel chatModel = OpenAiChatModel.builder().options(chatOpts).build();
         return ChatClient.create(chatModel);
