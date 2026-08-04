@@ -29,6 +29,10 @@ created: 2026-08-03
 | ☑ | T-011 | P2 问答：`/api/knowledge/{id}/chat` SSE + 详情页问答面板 + qa-golden 评测 | FR-009, NFR-005 | 流式问答可用、历史持久化；评测达标 | 8b65bd7 |
 | ☐ | T-012 | P2 检索：pgvector 检测装配 + 分块 embedding + KnowledgeTool 重写 + 降级 | FR-010 | 语义检索命中；禁 embedding 降级可用有 WARN | |
 
+## 后续任务（backlog，G2 后另立项）
+
+- **B-001** 会话列表端点按前缀过滤：`knowledge-*` 会话当前会出现在 /chat 页侧栏（`JpaChatMemoryRepository` 对任意 conversationId upsert `chat_conversation`），且从主聊天页向该会话发消息会双向污染条目问答上下文，侧栏删除也会误删条目问答历史。修法：`ChatHistoryService.listConversations()` 过滤 `knowledge-%` 前缀（或给会话加来源标记），并考虑禁止主聊天页写入 `knowledge-*` 会话。注意 `ChatHistoryService.java` 当前有用户未提交改动，需等其落地后实施。（T-011 审查发现）
+
 ## 验收记录（实现完成后填写，G2 用）
 
 | 对应 FR | 结果 ✓/✗ | 验证方式（命令 / 请求响应 / 操作步骤） |
