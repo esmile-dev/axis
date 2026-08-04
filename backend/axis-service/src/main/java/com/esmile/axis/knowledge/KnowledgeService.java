@@ -108,19 +108,28 @@ public class KnowledgeService {
     }
 
     /**
-     * FR-008: transfer an inbox item into the knowledge base. Trimmed content that is a
-     * single http/https URL goes through the fetch pipeline (ARTICLE); anything else is
-     * stored as a NOTE titled by its first line (max 50 chars). On success the inbox item
-     * is marked read via InboxService's existing logic; the inbox item is never deleted.
+     * FR-008: transfer an inbox item into the knowledge base, three ways: trimmed content
+     * that is a single http/https URL goes through the fetch pipeline (ARTICLE); otherwise
+     * a valid http(s) URL in the item's link field (DIGEST items keep the URL there, with
+     * content holding only the title) is fetched the same way, title auto-extracted;
+     * anything else is stored as a NOTE titled by its first line (max 50 chars). On
+     * success the inbox item is marked read via InboxService's existing logic; the inbox
+     * item is never deleted.
      */
     @Transactional
     public KnowledgeItemDetailView createFromInbox(String inboxItemId) {
         InboxItem inboxItem = inboxItemRepository.findById(inboxItemId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Inbox item not found: " + inboxItemId));
         String content = inboxItem.getContent().trim();
-        KnowledgeItemDetailView view = URL_PATTERN.matcher(content).matches()
-                ? createFromUrl(content)
-                : create(new CreateKnowledgeItemRequest(KnowledgeType.NOTE, deriveTitle(content), content, null, null));
+        String link = inboxItem.getLink() != null ? inboxItem.getLink().trim() : "";
+        KnowledgeItemDetailView view;
+        if (URL_PATTERN.matcher(content).matches()) {
+            view = createFromUrl(content);
+        } else if (URL_PATTERN.matcher(link).matches()) {
+            view = createFromUrl(link);
+        } else {
+            view = create(new CreateKnowledgeItemRequest(KnowledgeType.NOTE, deriveTitle(content), content, null, null));
+        }
         inboxService.update(inboxItemId, null, null, true);
         return view;
     }

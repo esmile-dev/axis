@@ -274,6 +274,33 @@ async function handleConvertToProject(data: { name: string; description: string;
   }
 }
 
+// 转入知识库（FR-008）：成功本地标已读（后端已置 readAt）；失败展示后端错误信息
+const knowledgeMessage = ref('')
+const knowledgeTransferOk = ref(false)
+const transferringToKnowledge = ref(false)
+
+async function handleConvertToKnowledge(id: string) {
+  if (transferringToKnowledge.value) return
+  transferringToKnowledge.value = true
+  knowledgeMessage.value = '转入中…'
+  knowledgeTransferOk.value = false
+  try {
+    await api('/api/knowledge/from-inbox', {
+      method: 'POST',
+      body: { inboxItemId: id }
+    })
+    const item = localFirst.items.value.find(i => i.id === id)
+    if (item && !item.readAt) item.readAt = new Date().toISOString()
+    knowledgeMessage.value = '已转入知识库'
+    knowledgeTransferOk.value = true
+  } catch (err: any) {
+    console.error('Failed to transfer to knowledge:', err)
+    knowledgeMessage.value = err?.data?.message || '转入失败，请稍后重试'
+  } finally {
+    transferringToKnowledge.value = false
+  }
+}
+
 const statusFilterOptions = [
   { value: 'all', label: 'All' },
   { value: 'TODO', label: 'Todo' },
@@ -315,6 +342,10 @@ onMounted(() => {
           {{ digestRunning ? '生成中…' : '生成今日摘要' }}
         </Button>
         <span v-if="digestMessage" class="text-xs text-muted-foreground">{{ digestMessage }}</span>
+        <span v-if="knowledgeMessage" class="text-xs text-muted-foreground">
+          {{ knowledgeMessage }}
+          <NuxtLink v-if="knowledgeTransferOk" to="/knowledge" class="text-primary hover:underline ml-1">查看</NuxtLink>
+        </span>
         <div class="flex items-center gap-2 text-xs text-muted-foreground">
           <CloudOff v-if="localFirst.isSyncing.value" class="w-4 h-4 animate-pulse" />
           <CloudOff v-else-if="localFirst.syncError.value" class="w-4 h-4 text-destructive" />
@@ -435,6 +466,7 @@ onMounted(() => {
           @update="updateItem"
           @convert-to-issue="openConvertDialog('issue')"
           @convert-to-project="openConvertDialog('project')"
+          @convert-to-knowledge="handleConvertToKnowledge"
           @delete="deleteItem"
         />
         <div v-else class="h-full flex flex-col items-center justify-center text-muted-foreground">

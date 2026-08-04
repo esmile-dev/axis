@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CircleCheck, Circle, ArrowRightLeft, FolderPlus, Clock, ExternalLink, Newspaper } from 'lucide-vue-next'
+import { CircleCheck, Circle, ArrowRightLeft, FolderPlus, Clock, ExternalLink, Newspaper, BookOpen } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 
 type DigestCategory = 'AI_FRONTIER' | 'TECH_INDUSTRY' | 'FINANCE_TECH' | 'OTHER'
@@ -38,6 +38,7 @@ const emit = defineEmits<{
   update: [id: string, data: { content?: string; status?: string }]
   convertToIssue: [id: string]
   convertToProject: [id: string]
+  convertToKnowledge: [id: string]
   delete: [id: string]
 }>()
 
@@ -239,6 +240,15 @@ const digestSections = computed(() => {
         >
           <FolderPlus class="w-4 h-4 mr-2" />
           Project
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          class="flex-1 h-9 bg-secondary/30 border-border/40 hover:bg-secondary/50"
+          @click="emit('convertToKnowledge', item.id)"
+        >
+          <BookOpen class="w-4 h-4 mr-2" />
+          Knowledge
         </Button>
       </div>
     </div>

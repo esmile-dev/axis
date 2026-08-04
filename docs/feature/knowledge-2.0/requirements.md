@@ -79,7 +79,7 @@ created: 2026-08-03
 
 ### FR-008 转入细节
 
-- `POST /api/knowledge/from-inbox {inboxItemId}`：内容 trim 后为合法 URL → 走 FR-002 管线；否则作为 `content` 直接入库（title 取首行/前 50 字符）
+- `POST /api/knowledge/from-inbox {inboxItemId}` 三路分流：内容 trim 后为合法 URL → 走 FR-002 管线；否则条目 `link` 为合法 http(s) URL（DIGEST 条目，URL 存 link、content 只存标题）→ 走 FR-002 管线抓 link（title 抓取自动提取）；否则作为 `content` 直接入库（title 取首行/前 50 字符）
 - 成功后调 inbox 既有逻辑标 `readAt`；不删除 inbox 条目
 
 ### FR-009/010 细节
@@ -93,3 +93,4 @@ created: 2026-08-03
 | 日期 | 变更内容 | 原因 |
 |------|----------|------|
 | 2026-08-03 | 初稿 | 2.0 立项（全网调研 + 六项关键决策确认） |
+| 2026-08-04 | FR-008 转入细节改为三路分流：content 为 URL 走抓取 → 否则 `link` 为合法 http(s) URL（DIGEST 条目）走抓取 → 否则 NOTE | T-007 审查发现 DIGEST 条目 URL 在 link 字段，原逻辑只产出标题壳 NOTE |

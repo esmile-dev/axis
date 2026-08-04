@@ -260,6 +260,29 @@ class KnowledgeServiceTest {
     }
 
     @Test
+    void createFromInbox_digestLink_fetchesLinkAndMarksRead() {
+        // DIGEST 条目：content 只存标题，URL 在 link 字段（T-010 新增分支）
+        InboxItem digest = inboxItem("in4", "36氪每日精选：某文章标题");
+        digest.setLink("https://example.com/digest-article");
+        when(inboxItemRepository.findById("in4")).thenReturn(Optional.of(digest));
+        when(webPageFetcher.fetch("https://example.com/digest-article")).thenReturn("<html>page</html>");
+        when(articleExtractor.extract("<html>page</html>"))
+                .thenReturn(new ExtractedArticle("抓取标题", "# 正文"));
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        KnowledgeItemDetailView view = service.createFromInbox("in4");
+
+        ArgumentCaptor<KnowledgeItem> captor = ArgumentCaptor.forClass(KnowledgeItem.class);
+        verify(itemRepository).saveAndFlush(captor.capture());
+        KnowledgeItem saved = captor.getValue();
+        assertThat(saved.getType()).isEqualTo(KnowledgeType.ARTICLE);
+        assertThat(saved.getSourceUrl()).isEqualTo("https://example.com/digest-article");
+        assertThat(view.title()).isEqualTo("抓取标题");
+        verify(inboxService).update("in4", null, null, true);
+        verify(eventPublisher).publishEvent(any(KnowledgeItemCreatedEvent.class));
+    }
+
+    @Test
     void createFromInbox_plainText_createsNoteTitledByFirstLineAndMarksRead() {
         when(inboxItemRepository.findById("in2"))
                 .thenReturn(Optional.of(inboxItem("in2", "  记录一下这个想法\n第二行补充  ")));

@@ -1,9 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
   BookOpen, FileText, StickyNote, Search, Plus, Cloud, CloudOff,
-  Tag, ExternalLink, ChevronLeft,
+  Tag, ExternalLink, ChevronLeft, ChevronDown, X,
 } from 'lucide-vue-next'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -127,7 +133,9 @@ async function selectItem(id: string) {
   detail.value = null
   detailLoading.value = true
   stopPolling()
+  cancelPendingProgressSave() // 切条目：取消防抖中未发的进度请求，避免把 A 的进度打到 B 上
   pollTimedOut.value = false
+  tagInput.value = ''
   // 恢复「脑图首次可见才挂载」的不变量（mindmapMounted 跨条目保留会导致在隐藏容器里 0×0 挂载、
   // fit 出 scale 0 的空白脑图）；停留在脑图 tab 时新详情到达即可见，允许直接挂载
   mindmapMounted.value = activeTab.value === 'mindmap'
@@ -135,6 +143,7 @@ async function selectItem(id: string) {
     const fresh = await api<KnowledgeItemDetail>(`/api/knowledge/${id}`)
     if (token !== selectToken) return
     detail.value = fresh
+    await restoreScrollPosition()
     startPollingIfNeeded()
   } catch (err) {
     if (token !== selectToken) return
@@ -148,11 +157,15 @@ watch(selectedId, (id) => {
   if (!id) {
     selectToken++ // 返回列表：作废在途请求并停轮询
     stopPolling()
+    cancelPendingProgressSave()
     detail.value = null
   }
 })
 
-onBeforeUnmount(stopPolling)
+onBeforeUnmount(() => {
+  stopPolling()
+  cancelPendingProgressSave()
+})
 
 async function regenerateArtifact(kind: 'SUMMARY' | 'MINDMAP') {
   const d = detail.value
@@ -167,6 +180,105 @@ async function regenerateArtifact(kind: 'SUMMARY' | 'MINDMAP') {
   } catch (err) {
     console.error(`Failed to regenerate ${kind}:`, err)
   }
+}
+
+// 状态切换（T-010）：乐观更新详情与列表徽章，失败回滚
+const detailStatusOptions: KnowledgeStatus[] = ['UNREAD', 'READING', 'DONE', 'ARCHIVED']
+
+async function updateStatus(status: KnowledgeStatus) {
+  const d = detail.value
+  if (!d || d.status === status) return
+  const previous = d.status
+  d.status = status
+  localFirst.updateItem(d.id, { status })
+  try {
+    await api(`/api/knowledge/${d.id}`, { method: 'PATCH', body: { status } })
+  } catch (err) {
+    if (detail.value === d) d.status = previous
+    localFirst.updateItem(d.id, { status: previous })
+    console.error('Failed to update knowledge status:', err)
+  }
+}
+
+// 阅读进度（T-010）：原文滚动 2s 防抖静默 PATCH；打开详情按 progress 恢复滚动位置
+const PROGRESS_SAVE_DELAY_MS = 2000
+let progressTimer: ReturnType<typeof setTimeout> | null = null
+
+function cancelPendingProgressSave() {
+  if (progressTimer) {
+    clearTimeout(progressTimer)
+    progressTimer = null
+  }
+}
+
+function onContentScroll() {
+  const el = contentScrollRef.value
+  const id = selectedId.value
+  if (!el || !id) return
+  const max = el.scrollHeight - el.clientHeight
+  if (max <= 0) return
+  const progress = Math.min(100, Math.max(0, Math.round((el.scrollTop / max) * 100)))
+  cancelPendingProgressSave()
+  progressTimer = setTimeout(() => saveProgress(id, progress), PROGRESS_SAVE_DELAY_MS)
+}
+
+// 静默更新：不触发列表重排/重拉，仅本地同步列表项进度
+async function saveProgress(id: string, progress: number) {
+  if (detail.value?.id === id) detail.value.progress = progress
+  localFirst.updateItem(id, { progress })
+  try {
+    await api(`/api/knowledge/${id}`, { method: 'PATCH', body: { progress } })
+  } catch (err) {
+    console.error('Failed to save reading progress:', err)
+  }
+}
+
+async function restoreScrollPosition() {
+  await nextTick()
+  const el = contentScrollRef.value
+  const d = detail.value
+  if (!el || !d || d.progress <= 0) return
+  el.scrollTop = (d.progress / 100) * (el.scrollHeight - el.clientHeight)
+}
+
+// 标签编辑（T-010）：回车/逗号新增、× 删除，整体替换 PATCH，乐观更新失败回滚
+const tagInput = ref('')
+
+async function updateTags(tags: string[]) {
+  const d = detail.value
+  if (!d) return
+  const previous = d.tags
+  d.tags = tags
+  localFirst.updateItem(d.id, { tags })
+  try {
+    await api(`/api/knowledge/${d.id}`, { method: 'PATCH', body: { tags } })
+  } catch (err) {
+    if (detail.value === d) d.tags = previous
+    localFirst.updateItem(d.id, { tags: previous })
+    console.error('Failed to update tags:', err)
+  }
+}
+
+function onTagKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault()
+    addTag()
+  }
+}
+
+function addTag() {
+  const d = detail.value
+  const tag = tagInput.value.replace(/[,，]/g, '').trim()
+  if (!d || !tag) return
+  tagInput.value = ''
+  if (tag.length > 50 || d.tags.includes(tag)) return // 去重、trim、长度 ≤50
+  updateTags([...d.tags, tag])
+}
+
+function removeTag(tag: string) {
+  const d = detail.value
+  if (!d) return
+  updateTags(d.tags.filter(t => t !== tag))
 }
 
 // Add dialog
@@ -409,9 +521,27 @@ onMounted(() => {
                   <span class="w-20 flex-shrink-0 text-muted-foreground">类型</span>
                   <span>{{ typeLabels[detail.type] ?? detail.type }}</span>
                 </div>
-                <div class="flex gap-3">
+                <div class="flex gap-3 items-center">
                   <span class="w-20 flex-shrink-0 text-muted-foreground">状态</span>
-                  <span>{{ statusLabels[detail.status] ?? detail.status }}</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <Button variant="outline" size="sm" class="h-7 px-2.5 text-xs bg-secondary/20 border-border/40 hover:bg-secondary/40">
+                        {{ statusLabels[detail.status] ?? detail.status }}
+                        <ChevronDown class="w-3 h-3 ml-1 text-muted-foreground" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" class="w-32 bg-[#1c1c1e] border-border">
+                      <DropdownMenuItem
+                        v-for="s in detailStatusOptions"
+                        :key="s"
+                        :class="detail.status === s ? 'bg-secondary/40' : ''"
+                        class="text-xs cursor-pointer"
+                        @click="updateStatus(s)"
+                      >
+                        {{ statusLabels[s] }}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 <div v-if="detail.progress > 0" class="flex gap-3 items-center">
                   <span class="w-20 flex-shrink-0 text-muted-foreground">进度</span>
@@ -432,16 +562,26 @@ onMounted(() => {
                     <ExternalLink class="w-3 h-3 flex-shrink-0" />
                   </a>
                 </div>
-                <div v-if="detail.tags?.length" class="flex gap-3">
+                <div class="flex gap-3">
                   <span class="w-20 flex-shrink-0 text-muted-foreground">标签</span>
-                  <div class="flex flex-wrap gap-1.5">
+                  <div class="flex flex-wrap items-center gap-1.5">
                     <span
                       v-for="tag in detail.tags"
                       :key="tag"
-                      class="px-1.5 py-0.5 rounded border border-border/60 bg-secondary/20 text-xs text-muted-foreground"
+                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border/60 bg-secondary/20 text-xs text-muted-foreground"
                     >
                       {{ tag }}
+                      <button class="hover:text-foreground transition-colors" @click="removeTag(tag)">
+                        <X class="w-3 h-3" />
+                      </button>
                     </span>
+                    <input
+                      v-model="tagInput"
+                      type="text"
+                      placeholder="+ 标签"
+                      class="w-20 bg-transparent border-none px-1 py-0.5 text-xs focus:ring-0 focus:outline-none placeholder:text-muted-foreground/60"
+                      @keydown="onTagKeydown"
+                    />
                   </div>
                 </div>
                 <div class="flex gap-3">
@@ -464,11 +604,12 @@ onMounted(() => {
               <TabsTrigger value="mindmap">脑图</TabsTrigger>
             </TabsList>
 
-            <!-- 原文：滚动容器带 ref，供 T-010 滚动进度使用 -->
+            <!-- 原文：滚动容器带 ref，滚动 2s 防抖记录阅读进度（T-010） -->
             <div
               v-show="activeTab === 'content'"
               ref="contentScrollRef"
               class="flex-1 min-h-0 mt-4 overflow-y-auto pr-2"
+              @scroll="onContentScroll"
             >
               <MarkdownRenderer :content="detail.content" class="max-w-3xl" />
             </div>
