@@ -1,5 +1,5 @@
 ---
-status: approved       # G1 通过 2026-08-03
+status: verified       # G1 通过 2026-08-03；G2 验收通过 2026-08-04
 feature: knowledge-2.0
 created: 2026-08-03
 ---

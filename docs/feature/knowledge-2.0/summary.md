@@ -1,5 +1,5 @@
 ---
-status: draft          # draft → done（G2 确认后翻转）
+status: done           # G2 验收通过 2026-08-04
 feature: knowledge-2.0
 created: 2026-08-04
 ---
