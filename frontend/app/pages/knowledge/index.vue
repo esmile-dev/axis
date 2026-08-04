@@ -73,6 +73,8 @@ const contentScrollRef = ref<HTMLElement | null>(null)
 
 watch(activeTab, (tab) => {
   if (tab === 'mindmap') mindmapMounted.value = true
+  // 停留在其他 tab 时打开的详情无法恢复滚动（容器隐藏），切回原文 tab 补一次
+  if (tab === 'content' && !progressRestored) restoreScrollPosition()
 })
 
 const summaryArtifact = computed(() => detail.value?.artifacts.find(a => a.kind === 'SUMMARY') ?? null)
@@ -134,6 +136,7 @@ async function selectItem(id: string) {
   detailLoading.value = true
   stopPolling()
   cancelPendingProgressSave() // 切条目：取消防抖中未发的进度请求，避免把 A 的进度打到 B 上
+  progressRestored = false // 新条目重新允许一次滚动位置恢复
   pollTimedOut.value = false
   tagInput.value = ''
   // 恢复「脑图首次可见才挂载」的不变量（mindmapMounted 跨条目保留会导致在隐藏容器里 0×0 挂载、
@@ -203,6 +206,8 @@ async function updateStatus(status: KnowledgeStatus) {
 // 阅读进度（T-010）：原文滚动 2s 防抖静默 PATCH；打开详情按 progress 恢复滚动位置
 const PROGRESS_SAVE_DELAY_MS = 2000
 let progressTimer: ReturnType<typeof setTimeout> | null = null
+// 每条详情只恢复一次滚动位置：容器隐藏（停留在其他 tab）时恢复无效，切回原文 tab 补一次
+let progressRestored = false
 
 function cancelPendingProgressSave() {
   if (progressTimer) {
@@ -238,6 +243,8 @@ async function restoreScrollPosition() {
   const el = contentScrollRef.value
   const d = detail.value
   if (!el || !d || d.progress <= 0) return
+  if (el.clientHeight === 0) return // 容器隐藏（停留在其他 tab）：赋值会被钳为 0，等切回原文 tab 补
+  progressRestored = true
   el.scrollTop = (d.progress / 100) * (el.scrollHeight - el.clientHeight)
 }
 
