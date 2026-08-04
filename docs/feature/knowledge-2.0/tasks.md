@@ -26,7 +26,7 @@ created: 2026-08-03
 | ☑ | T-008 | 前端骨架：`pages/knowledge/` 三栏布局 + 左导航筛选 + 列表 + 添加 Dialog（三 tab）+ ⌘K 命令 | FR-001/002/003/005 | 页面可用，筛选搜索添加全通；旧 knowledge.vue 删除 | 3681752 |
 | ☑ | T-009 | 详情三视图：原文渲染/总结/markmap 脑图（含大纲切换、骨架屏、失败重试） | FR-006 | 三 tab 正常；脑图可交互；失败态可重试 | 3083179 |
 | ☑ | T-010 | 状态切换 + 滚动进度自动记录与恢复 + 标签编辑 + Inbox「转入知识库」入口 | FR-007/008 | 状态/进度持久化；Inbox 转入全链路通 | a16b922 |
-| ☐ | T-011 | P2 问答：`/api/knowledge/{id}/chat` SSE + 详情页问答面板 + qa-golden 评测 | FR-009, NFR-005 | 流式问答可用、历史持久化；评测达标 | |
+| ☑ | T-011 | P2 问答：`/api/knowledge/{id}/chat` SSE + 详情页问答面板 + qa-golden 评测 | FR-009, NFR-005 | 流式问答可用、历史持久化；评测达标 | 8b65bd7 |
 | ☐ | T-012 | P2 检索：pgvector 检测装配 + 分块 embedding + KnowledgeTool 重写 + 降级 | FR-010 | 语义检索命中；禁 embedding 降级可用有 WARN | |
 
 ## 验收记录（实现完成后填写，G2 用）
@@ -34,6 +34,7 @@ created: 2026-08-03
 | 对应 FR | 结果 ✓/✗ | 验证方式（命令 / 请求响应 / 操作步骤） |
 |---------|----------|----------------------------------------|
 | NFR-003/004（T-006） | ✓ | 见下方 AI 评测结果 |
+| FR-009/NFR-005（T-011） | ✓ | 临时端口新 jar（7799）curl 实测：SSE token/done 帧流式输出且答案源自条目、追问代词可解析、超纲答「原文未提及」、两条目互不串、`GET /api/agent/conversations/knowledge-{id}/messages` 历史持久化、不存在条目 404；评测见下方 |
 
 <!-- AI/Agent 功能追加评测结果：评测集版本 / 指标 / 阈值 / 实测 / 失败样例 -->
 
@@ -65,3 +66,28 @@ KnowledgeSummaryEval: total=10 summaryStructure=10/10 (1.00, 阈值 1.00) releva
 
 - **失败样例**：en-04《Superlinear Returns》（25k 字符长文）脑图生成 LLM 调用抛 `OpenAIInvalidDataException`（transient API 读错误），产物按设计标 FAILED、内容为空——属 API 抖动而非 prompt 质量问题（该文脑图在迭代验证轮产出过合法大纲）；生产语义正确（可 regenerate 恢复）
 - **prompt 迭代记录**：第 1 轮脑图 6/9（长文节点 55/60 超标、超短文零标题）→ 强化 `PROMPT_MINDMAP` 节点数约束；第 2 轮结构 9/10（en-02 缺「关键洞察」节）→ `PROMPT_SUMMARY` 补「三节缺一不可」。两轮均记入 design.md 变更记录
+
+### T-011 AI 评测结果（2026-08-04）
+
+- **评测集**：`docs/feature/knowledge-2.0/evals/qa-golden.jsonl` v1（2026-08-04 定稿入库）——6 条 QA（基于 summary-golden 文章：zh-01/zh-02×2/en-01/en-03 事实型 5 条 + zh-01 超纲拒答 1 条，keyPoints 为 judge 用参考答案要点）
+- **评测入口**：`KnowledgeQaEval`（JUnit，`mvn test -pl axis-service` 随全量触达；无 `AI_API_KEY` 自动跳过）。触发命令：`export $(grep '^AI_' .env | xargs) && mvn test -pl axis-service -Dtest=KnowledgeQaEval`（模型 deepseek，judge 契约见 `evals/qa-judge.md`）
+- **链路真实性**：每条 QA 走真实 `KnowledgeQaService`（system prompt 构建 + 全行共享一个 `MessageWindowChatMemory` 实例——conversationId 接线错误会让条目上下文互串、judge 判 FAIL，隔离性由此被真实验证）+ LLM-judge 二元判定（VERDICT PASS/FAIL，`QaJudgeParser` 解析并有单测自检）
+- **实测汇总输出原文**（最终全量轮，两轮均 BUILD SUCCESS）：
+
+```
+[zh-01] verdict=PASS reason=答案完整覆盖了三个参考答案要点，且事实均源自原文。 | Q: Dario Amodei 为什么认为公开的 AI 模型不能叫「开源」？
+[zh-02] verdict=PASS reason=答案准确复述了原文中Cache Aside的正确更新顺序及先删缓存再更新数据库导致脏数据的并发问题，覆盖全部要点。 | Q: Cache Aside 模式更新数据时的正确顺序是什么？为什么先删缓存再更新数据库是错的？
+[zh-02] verdict=PASS reason=答案准确概括了Write Behind/Write Back的核心思路与代价，且覆盖全部参考答案要点，内容均源自原文。 | Q: Write Behind（Write Back）模式的核心思路是什么？代价是什么？
+[en-01] verdict=PASS reason=答案准确摘取并覆盖了原文中关于两者差异的两个要点，且无编造或外部信息。 | Q: How does agentic programming differ from vibe coding?
+[en-03] verdict=PASS reason=答案准确覆盖原文要点：shell 不负责通过 $PATH 查找命令，该工作由 exec 完成。 | Q: According to the article, which component is responsible for finding commands via the $PATH environment variable?
+[zh-01] verdict=PASS reason=答案明确说明原文未提及向量数据库或 RAG 系统，且未编造任何推荐，符合超纲问题的覆盖要求。 | Q: 作者在文中推荐了哪款向量数据库来搭建 RAG 系统？
+KnowledgeQaEval: total=6 pass=6/6 (1.00, 阈值 0.80)
+```
+
+| 指标 | 阈值 | 实测 | 结论 |
+|------|------|------|------|
+| judge 合格率（源自原文且覆盖 keyPoints） | ≥80% | 6/6 = 100%（连续两轮全量） | ✓ |
+| 超纲拒答样例 | ≥1 条且计入通过率 | 1 条（zh-01 向量数据库推荐），两轮均 PASS | ✓ |
+
+- **失败样例**：无
+- **prompt 迭代记录**：未迭代——system prompt 初版（标题+总结+原文注入、「原文未提及」拒答、语言跟随问题）首轮即 6/6，复测一轮确认稳定
