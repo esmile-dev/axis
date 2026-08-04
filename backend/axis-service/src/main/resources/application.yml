@@ -37,6 +37,10 @@ spring:
     open-in-view: false
 
   ai:
+    # Knowledge 2.0 FR-010：PgVectorStore 由 KnowledgeSearchConfig 探测 pgvector 后手工装配，
+    # 关闭自动装配（否则它会用 env 兜底的 EmbeddingModel 无条件再建一个 store）。
+    vectorstore:
+      type: none
     openai:
       # Env vars are the fallback when no AI config profile exists in DB.
       # Preferred workflow: add/activate profiles via Settings UI; DB is the source of truth.

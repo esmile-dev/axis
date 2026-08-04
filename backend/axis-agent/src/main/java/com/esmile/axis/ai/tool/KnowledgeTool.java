@@ -4,6 +4,8 @@ import com.esmile.axis.ai.ToolCallNotifier;
 import com.esmile.axis.knowledge.KnowledgeType;
 import com.esmile.axis.knowledge.entity.KnowledgeItem;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
+import com.esmile.axis.knowledge.search.KnowledgeSearchHit;
+import com.esmile.axis.knowledge.search.KnowledgeSearchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
 public class KnowledgeTool {
 
     private final KnowledgeItemRepository knowledgeItemRepository;
+    private final KnowledgeSearchService knowledgeSearchService;
     private final ToolCallNotifier toolCallNotifier;
 
     @Tool(description = "在知识库中创建一篇新文档")
@@ -47,22 +50,16 @@ public class KnowledgeTool {
                 .collect(Collectors.joining("\n"));
     }
 
-    @Tool(description = "搜索知识库文档内容（关键词搜索）")
+    @Tool(description = "语义搜索知识库文档：按内容语义匹配，返回最相关的 top-5 文档（标题 + 内容片段 + ID）；向量检索不可用时自动降级为关键词匹配")
     public String searchDocuments(
-            @ToolParam(description = "搜索关键词") String keyword) {
+            @ToolParam(description = "搜索查询（自然语言或关键词）") String keyword) {
         toolCallNotifier.emit("搜索知识库");
-        List<KnowledgeItem> docs = knowledgeItemRepository.findAllByOrderByCreatedAtDesc();
-        List<KnowledgeItem> matched = docs.stream()
-                .filter(d -> d.getTitle().toLowerCase().contains(keyword.toLowerCase())
-                        || d.getContent().toLowerCase().contains(keyword.toLowerCase()))
-                .toList();
-        if (matched.isEmpty()) {
+        List<KnowledgeSearchHit> hits = knowledgeSearchService.search(keyword);
+        if (hits.isEmpty()) {
             return "🔍 没有找到匹配 \"" + keyword + "\" 的文档";
         }
-        return matched.stream()
-                .map(d -> String.format("- %s (ID: %s)\n  摘要: %s...",
-                        d.getTitle(), d.getId(),
-                        d.getContent().substring(0, Math.min(100, d.getContent().length()))))
+        return hits.stream()
+                .map(h -> String.format("- %s (ID: %s)\n  摘要: %s...", h.title(), h.itemId(), h.snippet()))
                 .collect(Collectors.joining("\n"));
     }
 }

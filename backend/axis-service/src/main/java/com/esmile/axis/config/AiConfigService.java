@@ -6,8 +6,11 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.encrypt.Encryptors;
 import org.springframework.security.crypto.encrypt.TextEncryptor;
@@ -53,6 +56,10 @@ public class AiConfigService {
     @Value("${AI_MODEL:gpt-4o-mini}")
     private String envModel;
 
+    /** Knowledge 2.0 FR-010：embedding 模型名（配置项可覆盖，档案无独立字段，与 chat 模型同档案 base-url/key）。 */
+    @Value("${AI_EMBEDDING_MODEL:text-embedding-3-small}")
+    private String embeddingModel;
+
     private volatile ChatClient currentClient;
     private volatile ResolvedConfig currentConfig;
 
@@ -86,6 +93,17 @@ public class AiConfigService {
     /** Get the active ChatClient. Never null after startup. */
     public ChatClient get() {
         return currentClient;
+    }
+
+    /** Build an EmbeddingModel from the same active config source as {@link #get()}. */
+    public EmbeddingModel getEmbeddingModel() {
+        ResolvedConfig cfg = currentConfig;
+        OpenAiEmbeddingOptions embeddingOpts = OpenAiEmbeddingOptions.builder()
+                .apiKey(cfg.apiKey())
+                .baseUrl(cfg.endpoint())
+                .model(embeddingModel)
+                .build();
+        return OpenAiEmbeddingModel.builder().options(embeddingOpts).build();
     }
 
     /** Get the current effective config (apiKey in cleartext — internal use only). */

@@ -8,6 +8,7 @@ import com.esmile.axis.knowledge.entity.KnowledgeArtifact;
 import com.esmile.axis.knowledge.entity.KnowledgeItem;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
+import com.esmile.axis.knowledge.search.KnowledgeIndexService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,12 +39,14 @@ class KnowledgeArtifactGeneratorTest {
     private KnowledgeArtifactRepository artifactRepository;
     @Mock
     private AiConfigService aiConfigService;
+    @Mock
+    private KnowledgeIndexService knowledgeIndexService;
 
     private KnowledgeArtifactGenerator generator;
 
     @BeforeEach
     void setUp() {
-        generator = new KnowledgeArtifactGenerator(itemRepository, artifactRepository, aiConfigService);
+        generator = new KnowledgeArtifactGenerator(itemRepository, artifactRepository, aiConfigService, knowledgeIndexService);
     }
 
     private ChatClient.CallResponseSpec mockLlm() {

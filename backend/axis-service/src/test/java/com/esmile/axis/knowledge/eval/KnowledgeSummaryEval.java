@@ -8,6 +8,7 @@ import com.esmile.axis.knowledge.entity.KnowledgeItem;
 import com.esmile.axis.knowledge.generate.KnowledgeArtifactGenerator;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
+import com.esmile.axis.knowledge.search.NoopKnowledgeIndexService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -207,7 +208,8 @@ class KnowledgeSummaryEval {
         });
 
         KnowledgeArtifactGenerator generator =
-                new KnowledgeArtifactGenerator(itemRepository, artifactRepository, aiConfigService);
+                new KnowledgeArtifactGenerator(itemRepository, artifactRepository, aiConfigService,
+                        new NoopKnowledgeIndexService());
         generator.generateAll(article.id()); // direct call runs synchronously (no Spring proxy)
 
         Map<ArtifactKind, KnowledgeArtifact> byKind = new java.util.EnumMap<>(ArtifactKind.class);

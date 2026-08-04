@@ -17,6 +17,7 @@ import com.esmile.axis.knowledge.importer.ImportedFileParser.ParsedFile;
 import com.esmile.axis.knowledge.importer.KnowledgeFileStorage;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
+import com.esmile.axis.knowledge.search.KnowledgeIndexService;
 import com.esmile.axis.repository.InboxItemRepository;
 import com.esmile.axis.service.InboxService;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,13 +69,16 @@ class KnowledgeServiceTest {
     private InboxItemRepository inboxItemRepository;
     @Mock
     private InboxService inboxService;
+    @Mock
+    private KnowledgeIndexService knowledgeIndexService;
 
     private KnowledgeService service;
 
     @BeforeEach
     void setUp() {
         service = new KnowledgeService(itemRepository, artifactRepository, webPageFetcher, articleExtractor,
-                importedFileParser, knowledgeFileStorage, eventPublisher, inboxItemRepository, inboxService);
+                importedFileParser, knowledgeFileStorage, eventPublisher, inboxItemRepository, inboxService,
+                knowledgeIndexService);
     }
 
     @Test

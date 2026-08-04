@@ -16,6 +16,7 @@ import com.esmile.axis.knowledge.importer.ImportedFileParser.ParsedFile;
 import com.esmile.axis.knowledge.importer.KnowledgeFileStorage;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
+import com.esmile.axis.knowledge.search.KnowledgeIndexService;
 import com.esmile.axis.repository.InboxItemRepository;
 import com.esmile.axis.service.InboxService;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,7 @@ public class KnowledgeService {
     private final ApplicationEventPublisher eventPublisher;
     private final InboxItemRepository inboxItemRepository;
     private final InboxService inboxService;
+    private final KnowledgeIndexService knowledgeIndexService;
 
     @Transactional(readOnly = true)
     public List<KnowledgeItemSummaryView> list(KnowledgeType type, KnowledgeStatus status, String tag, String q) {
@@ -167,6 +169,8 @@ public class KnowledgeService {
         KnowledgeItem item = findOrThrow(id);
         artifactRepository.deleteAll(artifactRepository.findByItemId(id));
         itemRepository.delete(item);
+        // FR-010: 同步删除向量分块；实现内部捕获异常，不阻塞删除主流程
+        knowledgeIndexService.removeItem(id);
     }
 
     /**

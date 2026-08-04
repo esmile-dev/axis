@@ -7,6 +7,7 @@ import com.esmile.axis.knowledge.entity.KnowledgeArtifact;
 import com.esmile.axis.knowledge.entity.KnowledgeItem;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
+import com.esmile.axis.knowledge.search.KnowledgeIndexService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -37,6 +38,7 @@ public class KnowledgeArtifactGenerator {
     private final KnowledgeItemRepository itemRepository;
     private final KnowledgeArtifactRepository artifactRepository;
     private final AiConfigService aiConfigService;
+    private final KnowledgeIndexService knowledgeIndexService;
 
     /** In-flight dedup: a repeat trigger for the same item+kind is accepted but skipped. */
     private final Set<String> inflight = ConcurrentHashMap.newKeySet();
@@ -46,6 +48,8 @@ public class KnowledgeArtifactGenerator {
     public void generateAll(String itemId) {
         generate(itemId, ArtifactKind.SUMMARY);
         generate(itemId, ArtifactKind.MINDMAP);
+        // FR-010: 分块 embedding 索引挂在管线尾部；索引实现内部捕获异常，与产物状态机解耦
+        knowledgeIndexService.indexItem(itemId);
     }
 
     /** Single-artifact entry point used by the regenerate endpoint. */
