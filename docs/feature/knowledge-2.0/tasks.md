@@ -32,6 +32,8 @@ created: 2026-08-03
 ## 后续任务（backlog，G2 后另立项）
 
 - **B-001** 会话列表端点按前缀过滤：`knowledge-*` 会话当前会出现在 /chat 页侧栏（`JpaChatMemoryRepository` 对任意 conversationId upsert `chat_conversation`），且从主聊天页向该会话发消息会双向污染条目问答上下文，侧栏删除也会误删条目问答历史。修法：`ChatHistoryService.listConversations()` 过滤 `knowledge-%` 前缀（或给会话加来源标记），并考虑禁止主聊天页写入 `knowledge-*` 会话。注意 `ChatHistoryService.java` 当前有用户未提交改动，需等其落地后实施。（T-011 审查发现）
+- **B-002** `KnowledgeTool.createDocument` 直存仓储不发事件：Agent 聊天中创建的知识文档不进异步加工管线（产物永远 PENDING）也不进向量索引，与 design.md §6「走新创建管线（type=NOTE，触发异步加工）」有偏差（T-001 临时态遗留）。修法：改调 `KnowledgeService.create`（自动带事件）。（T-012 审查发现）
+- **B-003** pgvector 正向语义路径环境阻塞：本机 PG16 无 vector 扩展（未获授权安装系统软件）。安装后运行 `mvn test -pl axis-service -Dtest=KnowledgeVectorSearchEval` 复验 FR-010 正向路径。（T-012 环境记录）
 
 ## 验收记录（实现完成后填写，G2 用）
 
