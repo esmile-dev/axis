@@ -42,6 +42,15 @@ created: 2026-08-03
 
 | 对应 FR | 结果 ✓/✗ | 验证方式（命令 / 请求响应 / 操作步骤） |
 |---------|----------|----------------------------------------|
+| FR-001（T-001/002） | ✓ | `mvn test -pl axis-service`（含 create 默认值单测：UNREAD/0/PENDING）；curl POST 创建 → 列表可见、产物状态 PENDING |
+| FR-002（T-003） | ✓ | 单测 15 条；curl 实测 martinfowler.com / jvns.ca 正文干净无残渣；不可达/15.01s 超时/HTTP 404 → 422 `FETCH_FAILED`；空正文页 → 422 `EXTRACT_FAILED`；非法协议 → 400；畸形 URL → 422（终审修复） |
+| FR-003（T-004） | ✓ | 单测 17 条；curl 实测 md/txt/pdf 导入 content 正确、`.exe` → 415、21MB → 413、损坏 PDF → 422；`filePath=knowledge/<uuid>.<ext>` 落库且文件落盘 |
+| FR-004 / NFR-001（T-005） | ✓ | 单测 18 条；真实 LLM（k3）实测：创建 → PENDING→GENERATING→DONE 全程可见、总结三节/脑图纯标题、model 落库；改错 key → FAILED + error + 原文无损；key 恢复 → regenerate 202 → DONE；60s 超时写法与 digest 同源 |
+| FR-005（T-002/008） | ✓ | `KnowledgeItemRepositorySearchTest` 8 条真实 PG 集成测试锁住四参组合/MEMBER OF/大小写；前端三栏筛选/搜索/组合 API 契约实测正确，列表视图不含 content |
+| FR-006（T-009） | ✓ | `npm run build` 过；curl 契约（产物状态机/regenerate）+ SSR 实测；脑图隐藏挂载 scale-0 缺陷经修复轮关闭；浏览器级交互留 G2 人工过一遍 |
+| FR-007（T-010） | ✓ | curl 实测 PATCH status/progress/tags 刷新后仍在；非原文 tab 进度恢复缺陷经修复轮关闭 |
+| FR-008（T-007/010） | ✓ | 单测 8 条（URL/文字/DIGEST-link/404/空白/截断）；curl 实测三类 inbox 条目转入全链路通（DIGEST 走 link 抓取），原条目 readAt 非空，失败回滚不标读 |
+| NFR-002（T-003/005） | ✓ | 粘贴 POST 即时返回不等待 LLM（异步 AFTER_COMMIT 实测观察：创建返回后才轮询到状态推进）；URL 抓取 15s 超时实测 15.01s |
 | NFR-003/004（T-006） | ✓ | 见下方 AI 评测结果 |
 | FR-009/NFR-005（T-011） | ✓ | 临时端口新 jar（7799）curl 实测：SSE token/done 帧流式输出且答案源自条目、追问代词可解析、超纲答「原文未提及」、两条目互不串、`GET /api/agent/conversations/knowledge-{id}/messages` 历史持久化、不存在条目 404；评测见下方 |
 | FR-010（T-012） | ✓（降级路径实测；正向语义路径**环境阻塞**——本机 PG 无 pgvector 扩展，按简报未装系统软件，装扩展后跑 `KnowledgeVectorSearchEval` 复验） | `mvn test -pl axis-service` 155/155（含分块/降级/探测/运行时降级单测）；临时端口 7799 新 jar 实测：启动日志 `WARN knowledge.vector.degraded reason=pgvector-extension-missing`，创建条目后 Agent chat 触发 `搜索知识库` 工具帧并关键词命中目标条目，清理无残留 |
