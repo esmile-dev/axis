@@ -27,7 +27,7 @@ created: 2026-08-03
 | ☑ | T-009 | 详情三视图：原文渲染/总结/markmap 脑图（含大纲切换、骨架屏、失败重试） | FR-006 | 三 tab 正常；脑图可交互；失败态可重试 | 3083179 |
 | ☑ | T-010 | 状态切换 + 滚动进度自动记录与恢复 + 标签编辑 + Inbox「转入知识库」入口 | FR-007/008 | 状态/进度持久化；Inbox 转入全链路通 | a16b922 |
 | ☑ | T-011 | P2 问答：`/api/knowledge/{id}/chat` SSE + 详情页问答面板 + qa-golden 评测 | FR-009, NFR-005 | 流式问答可用、历史持久化；评测达标 | 8b65bd7 |
-| ☐ | T-012 | P2 检索：pgvector 检测装配 + 分块 embedding + KnowledgeTool 重写 + 降级 | FR-010 | 语义检索命中；禁 embedding 降级可用有 WARN | |
+| ☑ | T-012 | P2 检索：pgvector 检测装配 + 分块 embedding + KnowledgeTool 重写 + 降级 | FR-010 | 语义检索命中；禁 embedding 降级可用有 WARN | 98cb021 |
 
 ## 后续任务（backlog，G2 后另立项）
 
@@ -39,6 +39,7 @@ created: 2026-08-03
 |---------|----------|----------------------------------------|
 | NFR-003/004（T-006） | ✓ | 见下方 AI 评测结果 |
 | FR-009/NFR-005（T-011） | ✓ | 临时端口新 jar（7799）curl 实测：SSE token/done 帧流式输出且答案源自条目、追问代词可解析、超纲答「原文未提及」、两条目互不串、`GET /api/agent/conversations/knowledge-{id}/messages` 历史持久化、不存在条目 404；评测见下方 |
+| FR-010（T-012） | ✓（降级路径实测；正向语义路径**环境阻塞**——本机 PG 无 pgvector 扩展，按简报未装系统软件，装扩展后跑 `KnowledgeVectorSearchEval` 复验） | `mvn test -pl axis-service` 155/155（含分块/降级/探测/运行时降级单测）；临时端口 7799 新 jar 实测：启动日志 `WARN knowledge.vector.degraded reason=pgvector-extension-missing`，创建条目后 Agent chat 触发 `搜索知识库` 工具帧并关键词命中目标条目，清理无残留 |
 
 <!-- AI/Agent 功能追加评测结果：评测集版本 / 指标 / 阈值 / 实测 / 失败样例 -->
 
