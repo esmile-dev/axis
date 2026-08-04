@@ -15,11 +15,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "issue")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class Issue {
 
     @Id
@@ -57,6 +53,8 @@ public class Issue {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id")
     @JsonIgnoreProperties({"issues", "hibernateLazyInitializer"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Project project;
 
     @Column(columnDefinition = "TEXT")
@@ -66,6 +64,8 @@ public class Issue {
     @OrderBy("createdAt DESC")
     @Builder.Default
     @JsonIgnoreProperties({"issue", "hibernateLazyInitializer"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private List<Comment> comments = new ArrayList<>();
 
     @CreationTimestamp

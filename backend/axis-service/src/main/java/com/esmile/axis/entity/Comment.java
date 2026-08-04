@@ -10,11 +10,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "comment")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class Comment {
 
     @Id
@@ -30,6 +26,8 @@ public class Comment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "issue_id", nullable = false)
     @JsonIgnoreProperties({"comments", "project", "hibernateLazyInitializer"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Issue issue;
 
     @CreationTimestamp

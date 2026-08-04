@@ -144,7 +144,8 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 - 匹配现有文件的风格、命名与注释密度，不引入自己的默认偏好
 - 最小改动解决问题：不加未要求的特性/抽象/可配置性；只改必须改的，不顺手"改进"相邻代码；变更产生的孤立 import/变量要删除，但不删预先存在的死代码
 - 后端使用 Lombok；Java 21；包根为 `com.esmile.axis`
-- DTO/值对象一律 `record`；禁止 Lombok `@Data`（`@Slf4j` 可用）
+- DTO/值对象一律 `record`；除 JPA entity 外禁止 Lombok `@Data`（`@Slf4j` 可用）
+- JPA entity 固定注解组合（写在一行）：`@Data @NoArgsConstructor @AllArgsConstructor @Builder`；懒加载字段（`@ManyToOne`/`@OneToMany`/`@ElementCollection` 等）必须加 `@ToString.Exclude @EqualsAndHashCode.Exclude`——否则 `toString` 触发懒加载/循环引用，`equals/hashCode` 基于可变字段会破坏 Set/Map 语义
 - 类型分支用 pattern matching switch + sealed；禁止 `instanceof` 后强转
 - `Optional` 只作返回值，不作字段/参数
 - 集合过滤/转换/聚合默认 Stream 链式

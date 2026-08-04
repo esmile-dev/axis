@@ -14,11 +14,7 @@ import java.time.LocalDate;
 
 @Entity
 @Table(name = "inbox_item")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class InboxItem {
 
     @Id

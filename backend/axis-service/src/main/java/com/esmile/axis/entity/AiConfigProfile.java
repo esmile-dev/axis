@@ -16,11 +16,7 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "ai_config_profile")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class AiConfigProfile {
 
     @Id

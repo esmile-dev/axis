@@ -11,11 +11,7 @@ import java.time.Instant;
 @Entity
 @Table(name = "knowledge_artifact",
         uniqueConstraints = @UniqueConstraint(columnNames = {"item_id", "kind"}))
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class KnowledgeArtifact {
 
     @Id
@@ -24,6 +20,8 @@ public class KnowledgeArtifact {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "item_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private KnowledgeItem item;
 
     @Enumerated(EnumType.STRING)

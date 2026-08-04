@@ -14,11 +14,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "project")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class Project {
 
     @Id
@@ -44,6 +40,8 @@ public class Project {
     @Builder.Default
     @JsonIgnore
     @JsonIgnoreProperties({"project", "comments", "hibernateLazyInitializer"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private List<Issue> issues = new ArrayList<>();
 
     @Transient

@@ -13,11 +13,7 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "chat_message", indexes = @Index(name = "idx_chat_message_conversation", columnList = "conversationId"))
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class ChatMessage {
 
     @Id

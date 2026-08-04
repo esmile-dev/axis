@@ -14,11 +14,7 @@ import java.util.Set;
 
 @Entity
 @Table(name = "knowledge_item")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class KnowledgeItem {
 
     @Id
@@ -63,6 +59,8 @@ public class KnowledgeItem {
     @CollectionTable(name = "knowledge_item_tag", joinColumns = @JoinColumn(name = "item_id"))
     @Column(name = "tag", length = 50)
     @Builder.Default
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Set<String> tags = new HashSet<>();
 
     @CreationTimestamp
