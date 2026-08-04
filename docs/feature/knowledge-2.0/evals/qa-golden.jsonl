@@ -1,0 +1,6 @@
+{"articleId":"zh-01","question":"Dario Amodei 为什么认为公开的 AI 模型不能叫「开源」？","keyPoints":["公开的只是权重文件，业界叫「开放权重」(open weights)","看不到模型的内部运作","无法像传统开源项目那样提交修改、参与模型的开发"]}
+{"articleId":"zh-02","question":"Cache Aside 模式更新数据时的正确顺序是什么？为什么先删缓存再更新数据库是错的？","keyPoints":["正确顺序是先更新数据库，成功后再让缓存失效（删缓存）","先删缓存再更新数据库时，并发查询会把老数据读出来放回缓存","这会导致缓存中长期残留脏数据"]}
+{"articleId":"zh-02","question":"Write Behind（Write Back）模式的核心思路是什么？代价是什么？","keyPoints":["更新数据时只更新缓存，不直接更新数据库","缓存异步地批量更新数据库（可合并同一数据的多次操作，I/O 快）","代价是数据不是强一致、可能丢失"]}
+{"articleId":"en-01","question":"How does agentic programming differ from vibe coding?","keyPoints":["In agentic programming humans are concerned with the code and often give it detailed review","In vibe coding humans don't look at the code and even forget that it exists"]}
+{"articleId":"en-03","question":"According to the article, which component is responsible for finding commands via the $PATH environment variable?","keyPoints":["It is not the shell's job","exec does that"]}
+{"articleId":"zh-01","question":"作者在文中推荐了哪款向量数据库来搭建 RAG 系统？","keyPoints":["答案明确表示原文未提及该内容","答案没有编造任何数据库推荐"]}

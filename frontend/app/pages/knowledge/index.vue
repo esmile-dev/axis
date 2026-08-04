@@ -2,7 +2,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
   BookOpen, FileText, StickyNote, Search, Plus, Cloud, CloudOff,
-  Tag, ExternalLink, ChevronLeft, ChevronDown, X,
+  Tag, ExternalLink, ChevronLeft, ChevronDown, X, Sparkles,
 } from 'lucide-vue-next'
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ import KnowledgeItemCard from '@/components/KnowledgeItemCard.vue'
 import KnowledgeAddDialog from '@/components/KnowledgeAddDialog.vue'
 import KnowledgeArtifactView from '@/components/KnowledgeArtifactView.vue'
 import KnowledgeMindmap from '@/components/KnowledgeMindmap.vue'
+import KnowledgeQaPanel from '@/components/KnowledgeQaPanel.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import type { ArtifactStatus, KnowledgeItemDetail, KnowledgeItemSummary, KnowledgeStatus, KnowledgeType } from '@/types'
 
@@ -68,6 +69,8 @@ const detailLoading = ref(false)
 // Detail tabs：脑图依赖 DOM 尺寸，首次切到该 tab 才挂载，之后 v-show 保活不销毁重建
 const activeTab = ref<'content' | 'summary' | 'mindmap'>('content')
 const mindmapMounted = ref(false)
+// AI 问答面板（T-011）：右栏底部可开合；面板组件 :key=detail.id，切条目重挂载即清空重载
+const qaOpen = ref(false)
 // 原文滚动容器：T-010 滚动进度记录/恢复基于此 ref
 const contentScrollRef = ref<HTMLElement | null>(null)
 
@@ -520,7 +523,19 @@ onMounted(() => {
                 返回列表
               </button>
 
-              <h2 class="text-xl font-bold tracking-tight leading-snug">{{ detail.title }}</h2>
+              <div class="flex items-start justify-between gap-4">
+                <h2 class="text-xl font-bold tracking-tight leading-snug">{{ detail.title }}</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="h-7 px-2.5 text-xs shrink-0 bg-secondary/20 border-border/40 hover:bg-secondary/40"
+                  :class="{ 'bg-secondary/50 text-foreground': qaOpen }"
+                  @click="qaOpen = !qaOpen"
+                >
+                  <Sparkles class="w-3 h-3 mr-1" />
+                  AI 问答
+                </Button>
+              </div>
 
               <!-- Meta -->
               <div class="mt-4 space-y-2 text-sm">
@@ -651,6 +666,15 @@ onMounted(() => {
               </KnowledgeArtifactView>
             </div>
           </Tabs>
+
+          <!-- AI 问答面板（T-011）：右栏底部开合，:key 按条目隔离会话状态 -->
+          <KnowledgeQaPanel
+            v-if="qaOpen"
+            :key="detail.id"
+            :item-id="detail.id"
+            class="h-[45%] min-h-[260px] shrink-0 border-t border-border/40"
+            @close="qaOpen = false"
+          />
         </div>
 
         <!-- Load failed -->
