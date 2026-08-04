@@ -7,6 +7,7 @@ import type { Transformer } from 'markmap-lib'
 
 const props = defineProps<{
   content: string
+  active: boolean
 }>()
 
 const mode = ref<'map' | 'outline'>('map')
@@ -15,6 +16,8 @@ const svgRef = ref<SVGSVGElement | null>(null)
 
 let mm: Markmap | null = null
 let transformer: Transformer | null = null
+// 隐藏（display:none）状态下渲染/fit 出的缩放无效，置真后在变为可见时补一次 fit
+let needsFit = false
 
 // 暗色背景可读的分支配色（默认 d3 category10 的红/棕/灰在暗色下偏暗）
 const DARK_PALETTE = ['#7aa2f7', '#9ece6a', '#e0af68', '#bb9af7', '#f7768e', '#7dcfff', '#73daca', '#ff9e64']
@@ -47,6 +50,7 @@ async function renderMap() {
     mm ??= Markmap.create(svg, markmapOptions)
     await mm.setData(root)
     await mm.fit()
+    needsFit = !props.active
     mapError.value = false
   } catch (err) {
     console.error('Failed to render mindmap:', err)
@@ -57,6 +61,13 @@ async function renderMap() {
 
 watch(() => props.content, renderMap)
 watch(mode, renderMap)
+// 仅补偿隐藏期挂载/渲染（needsFit）：同一条目内 tab 正常往返不触发重 fit
+watch(() => props.active, async (active) => {
+  if (!active || !needsFit) return
+  needsFit = false
+  await nextTick()
+  if (mode.value === 'map') await mm?.fit()
+})
 onMounted(renderMap)
 onBeforeUnmount(() => {
   mm?.destroy()

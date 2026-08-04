@@ -128,6 +128,9 @@ async function selectItem(id: string) {
   detailLoading.value = true
   stopPolling()
   pollTimedOut.value = false
+  // 恢复「脑图首次可见才挂载」的不变量（mindmapMounted 跨条目保留会导致在隐藏容器里 0×0 挂载、
+  // fit 出 scale 0 的空白脑图）；停留在脑图 tab 时新详情到达即可见，允许直接挂载
+  mindmapMounted.value = activeTab.value === 'mindmap'
   try {
     const fresh = await api<KnowledgeItemDetail>(`/api/knowledge/${id}`)
     if (token !== selectToken) return
@@ -495,7 +498,7 @@ onMounted(() => {
                 @regenerate="regenerateArtifact('MINDMAP')"
               >
                 <template #default="{ artifact }">
-                  <KnowledgeMindmap v-if="mindmapMounted" :content="artifact.content" />
+                  <KnowledgeMindmap v-if="mindmapMounted" :content="artifact.content" :active="activeTab === 'mindmap'" />
                 </template>
               </KnowledgeArtifactView>
             </div>
