@@ -10,7 +10,8 @@ import java.io.IOException;
 
 /**
  * Thin network layer of the URL-ingest pipeline: GETs the page HTML with a desktop
- * User-Agent and a hard 15s timeout. Any network/timeout/HTTP error becomes 422 FETCH_FAILED.
+ * User-Agent and a hard 15s timeout. Any network/timeout/HTTP error — or a malformed
+ * URL that passes {@code @Pattern} but is rejected by Jsoup — becomes 422 FETCH_FAILED.
  */
 @Slf4j
 @Component
@@ -27,7 +28,7 @@ public class WebPageFetcher {
                     .timeout(TIMEOUT_MS)
                     .get()
                     .outerHtml();
-        } catch (IOException e) {
+        } catch (IOException | IllegalArgumentException e) {
             log.warn("URL fetch failed url={}: {}", url, e.toString());
             String detail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "FETCH_FAILED: " + detail);
