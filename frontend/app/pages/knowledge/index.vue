@@ -311,7 +311,7 @@ async function handleAdded(item: KnowledgeItemDetail) {
   selectItem(item.id)
 }
 
-// Left nav data
+// Filter options
 const statusNav: { value: 'all' | KnowledgeStatus; label: string }[] = [
   { value: 'all', label: '全部' },
   { value: 'UNREAD', label: '未读' },
@@ -342,14 +342,6 @@ const allTags = computed(() => {
   }
   return [...set].sort()
 })
-
-function toggleType(type: KnowledgeType) {
-  filterType.value = filterType.value === type ? 'all' : type
-}
-
-function toggleTag(tag: string) {
-  filterTag.value = filterTag.value === tag ? null : tag
-}
 
 const showSkeleton = computed(() => localFirst.isSyncing.value && localFirst.items.value.length === 0)
 
@@ -390,67 +382,16 @@ onMounted(() => {
       </div>
     </header>
 
-    <!-- Main Content: three columns -->
+    <!-- Main Content: two columns -->
     <div class="flex-1 flex overflow-hidden">
-      <!-- Left: filter nav -->
-      <aside class="hidden md:flex w-[220px] flex-shrink-0 border-r border-border/40 flex-col">
-        <ScrollArea class="flex-1">
-          <div class="p-3 space-y-5">
-            <!-- Status -->
-            <div>
-              <p class="px-2 mb-1 text-xs font-medium text-muted-foreground">状态</p>
-              <button
-                v-for="s in statusNav"
-                :key="s.value"
-                class="w-full flex items-center px-2 py-1.5 rounded-md text-sm transition-colors"
-                :class="filterStatus === s.value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'"
-                @click="filterStatus = s.value"
-              >
-                {{ s.label }}
-              </button>
-            </div>
-
-            <!-- Type -->
-            <div>
-              <p class="px-2 mb-1 text-xs font-medium text-muted-foreground">类型</p>
-              <button
-                v-for="t in typeNav"
-                :key="t.value"
-                class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors"
-                :class="filterType === t.value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'"
-                @click="toggleType(t.value)"
-              >
-                <component :is="t.icon" class="w-3.5 h-3.5" />
-                {{ t.label }}
-              </button>
-            </div>
-
-            <!-- Tags -->
-            <div v-if="allTags.length > 0">
-              <p class="px-2 mb-1 text-xs font-medium text-muted-foreground">标签</p>
-              <button
-                v-for="tag in allTags"
-                :key="tag"
-                class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors truncate"
-                :class="filterTag === tag ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'"
-                @click="toggleTag(tag)"
-              >
-                <Tag class="w-3 h-3 flex-shrink-0" />
-                <span class="truncate">{{ tag }}</span>
-              </button>
-            </div>
-          </div>
-        </ScrollArea>
-      </aside>
-
-      <!-- Middle: item list -->
+      <!-- Left: item list -->
       <div
-        class="w-full md:w-[360px] flex-shrink-0 border-r border-border/40 flex-col"
+        class="w-full md:w-[400px] flex-shrink-0 border-r border-border/40 flex-col"
         :class="selectedId ? 'hidden md:flex' : 'flex'"
       >
-        <!-- Search -->
-        <div class="p-3 border-b border-border/40">
-          <div class="relative">
+        <!-- Search + filters（窄栏自动换行） -->
+        <div class="p-3 border-b border-border/40 flex flex-wrap items-center gap-1.5">
+          <div class="relative flex-1 min-w-[140px]">
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               v-model="searchQuery"
@@ -459,6 +400,85 @@ onMounted(() => {
               class="w-full bg-secondary/20 border border-border/40 rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/60"
             />
           </div>
+
+          <!-- Status filter -->
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="outline" size="sm" class="h-8 px-2.5 text-xs bg-secondary/20 border-border/40 hover:bg-secondary/40">
+                状态：{{ filterStatus === 'all' ? '全部' : statusLabels[filterStatus] }}
+                <ChevronDown class="w-3 h-3 ml-1 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" class="w-32 bg-[#1c1c1e] border-border">
+              <DropdownMenuItem
+                v-for="s in statusNav"
+                :key="s.value"
+                :class="filterStatus === s.value ? 'bg-secondary/40' : ''"
+                class="text-xs cursor-pointer"
+                @click="filterStatus = s.value"
+              >
+                {{ s.label }}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <!-- Type filter -->
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="outline" size="sm" class="h-8 px-2.5 text-xs bg-secondary/20 border-border/40 hover:bg-secondary/40">
+                类型：{{ filterType === 'all' ? '全部' : typeLabels[filterType] }}
+                <ChevronDown class="w-3 h-3 ml-1 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" class="w-32 bg-[#1c1c1e] border-border">
+              <DropdownMenuItem
+                :class="filterType === 'all' ? 'bg-secondary/40' : ''"
+                class="text-xs cursor-pointer"
+                @click="filterType = 'all'"
+              >
+                全部
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                v-for="t in typeNav"
+                :key="t.value"
+                :class="filterType === t.value ? 'bg-secondary/40' : ''"
+                class="text-xs cursor-pointer"
+                @click="filterType = t.value"
+              >
+                <component :is="t.icon" class="w-3.5 h-3.5 mr-1.5" />
+                {{ t.label }}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <!-- Tag filter（无标签时隐藏） -->
+          <DropdownMenu v-if="allTags.length > 0">
+            <DropdownMenuTrigger as-child>
+              <Button variant="outline" size="sm" class="h-8 px-2.5 text-xs max-w-[140px] bg-secondary/20 border-border/40 hover:bg-secondary/40">
+                <span class="truncate">标签：{{ filterTag ?? '全部' }}</span>
+                <ChevronDown class="w-3 h-3 ml-1 flex-shrink-0 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" class="w-40 max-h-72 overflow-y-auto bg-[#1c1c1e] border-border">
+              <DropdownMenuItem
+                :class="filterTag === null ? 'bg-secondary/40' : ''"
+                class="text-xs cursor-pointer"
+                @click="filterTag = null"
+              >
+                全部
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                v-for="tag in allTags"
+                :key="tag"
+                :class="filterTag === tag ? 'bg-secondary/40' : ''"
+                class="text-xs cursor-pointer"
+                @click="filterTag = tag"
+              >
+                <Tag class="w-3 h-3 mr-1.5 flex-shrink-0" />
+                <span class="truncate">{{ tag }}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <!-- List -->
