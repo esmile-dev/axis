@@ -28,13 +28,20 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      # Flyway 管 schema，Hibernate 只校验实体与库一致（不一致即启动失败）
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
     show-sql: false
     open-in-view: false
+
+  flyway:
+    enabled: true
+    # 已有的开发库（无 flyway_schema_history）首次启动时按基线处理，跳过 V1；
+    # 全新空库则从 V1__init.sql 建全量 schema
+    baseline-on-migrate: true
 
   ai:
     # Knowledge 2.0 FR-010：PgVectorStore 由 KnowledgeSearchConfig 探测 pgvector 后手工装配，

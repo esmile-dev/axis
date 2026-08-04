@@ -23,7 +23,7 @@
 
 - **前端**：Nuxt 4 + Vue 3 Composition API + TypeScript；Pinia + VueUse 状态管理；Tailwind CSS + Shadcn-Vue（基于 Reka UI）+ Lucide Vue Next 图标；`marked` 渲染 Markdown
 - **后端**：Spring Boot 4.0 + Spring Framework 7.0 + Java 21；Spring Data JPA + Hibernate；Spring AI 2.0（ChatClient + Tool Calling）；Maven 多模块构建
-- **数据库**：PostgreSQL（本地默认 `axis` 库；`ddl-auto: update`，无 Flyway/Liquibase 迁移脚本）
+- **数据库**：PostgreSQL（本地默认 `axis` 库；Flyway 管 schema + `ddl-auto: validate`；开发期改表直接改 `V1__init.sql` 后重建本地库，不写增量迁移脚本）
 
 ## 仓库结构
 
