@@ -98,7 +98,7 @@ sequenceDiagram
     participant L as LLM
     F->>B: POST /api/knowledge(/fetch|/import)
     B->>B: 归一化为 content(Markdown)，落 knowledge_item(产物状态=PENDING)
-    B-->>F: 201 条目摘要（不等待 LLM）
+    B-->>F: 200 条目摘要（不等待 LLM）
     B->>A: KnowledgeItemCreatedEvent
     A->>L: 生成总结（60s 超时）
     A->>B: artifact SUMMARY 落表，summary_status=DONE/FAILED(error)
@@ -147,3 +147,4 @@ sequenceDiagram
 | 2026-08-04 | 脑图 prompt（`KnowledgePrompts.PROMPT_MINDMAP`）强化节点数约束：5-40 改为「严格控制……超出即不合格」并给合并/补足指引；补充「H1 恰好一个且为第一行」「无论文章长短必须输出大纲」「不输出解释或注释」 | T-006 首轮全量评测脑图合格率 6/9：长文节点超标（55/60 个）、超短文未输出任何标题；按 T-006 简报授权迭代 prompt 后重跑 |
 | 2026-08-04 | 总结 prompt（`KnowledgePrompts.PROMPT_SUMMARY`）补充「三节缺一不可，即使原文简短关键洞察也必须保留至少 1 条」 | T-006 次轮全量评测结构合格率 9/10：en-02 短文缺失「关键洞察」节；按 T-006 简报授权迭代 prompt 后重跑 |
 | 2026-08-04 | from-inbox 转入逻辑改三路分流：`KnowledgeService.createFromInbox` 在 content 非 URL 时检查条目 `link`，合法 http(s) URL 则走抓取管线（DIGEST 条目 URL 在 link、content 只存标题） | T-007 审查发现 DIGEST 条目 URL 在 link 字段，原逻辑只产出标题壳 NOTE |
+| 2026-08-04 | 已知接受风险登记（本地单人威胁模型）：①抓取/粘贴内容经 marked v-html 渲染无消毒（XSS 面，修法 DOMPurify 或 jsoup Safelist，留 backlog）；②/api/knowledge/fetch 与 from-inbox 无 SSRF 防护（可抓内网/元数据地址，修法解析后校验 InetAddress 拒私网段，留 backlog）；③include-message:always 与 multipart 20MB 为全局生效，外溢至既有端点 | 终审安全审查结论，项目未上线暂不阻断 |

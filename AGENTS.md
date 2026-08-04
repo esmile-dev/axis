@@ -71,7 +71,7 @@ cd frontend && npm run build        # 生产构建
 cd frontend && npm run preview      # 预览构建结果
 
 # 后端（端口 7789）
-cd backend && mvn spring-boot:run -pl axis-agent -am   # 启动（必须 -pl axis-agent，-am 带上 axis-service）
+cd backend && mvn package && java -jar axis-agent/target/axis-agent-0.1.0.jar   # 启动（Boot 4 下 spring-boot:run 在父 pom 聚合报错，走 fat jar）
 cd backend && mvn compile           # 编译
 cd backend && mvn package           # 打包可执行 fat jar
 ```
@@ -90,7 +90,7 @@ cd backend && mvn test                                   # 全部测试
 cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 ```
 
-后端测试位于 `backend/axis-service/src/test/java/...`（如 `DailyDigestServiceTest`、`AiConfigServiceTest`、`ConfigControllerTest`）。`digest/summarize/SummarizationEval.java` 是 AI 功能的评测入口（对应 workflow.md 第 7 条：AI 功能验收必须可评测）。
+后端测试位于 `backend/axis-service/src/test/java/...`（如 `DailyDigestServiceTest`、`AiConfigServiceTest`、`ConfigControllerTest`）。`mvn test` 前置依赖本地 PostgreSQL 运行（`KnowledgeItemRepositorySearchTest` 直连 `axis` 库）。`digest/summarize/SummarizationEval.java` 是 AI 功能的评测入口（对应 workflow.md 第 7 条：AI 功能验收必须可评测）。
 
 **提交前必须测试。未验证 = 未完成。**
 
@@ -106,7 +106,7 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 
 ## 数据模型
 
-核心实体关系：`Project` 1:N `Issue` 1:N `Comment`；`InboxItem`、`KnowledgeDocument` 独立。Issue 状态枚举：`TODO` / `IN_PROGRESS` / `IN_REVIEW` / `DONE` / `CANCELLED`。
+核心实体关系：`Project` 1:N `Issue` 1:N `Comment`；`KnowledgeItem` 1:N `KnowledgeArtifact`；`InboxItem` 独立。Issue 状态枚举：`TODO` / `IN_PROGRESS` / `IN_REVIEW` / `DONE` / `CANCELLED`。KnowledgeItem type 六枚举：`ARTICLE` / `BOOK` / `PODCAST` / `VIDEO` / `TUTORIAL` / `NOTE`；status 四枚举：`UNREAD` / `READING` / `DONE` / `ARCHIVED`。
 
 ## 环境变量
 
@@ -114,6 +114,7 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 
 - `DATABASE_URL`（JDBC 格式，默认 `jdbc:postgresql://localhost:5432/axis`）/ `DB_USERNAME` / `DB_PASSWORD`
 - `AI_API_KEY` / `AI_BASE_URL` / `AI_MODEL`：OpenAI 兼容接口。环境变量是兜底——推荐启动后在 Settings 页添加并激活 AI 配置档案，运行时以 DB 档案为准
+- `AI_EMBEDDING_MODEL`（默认 `text-embedding-3-small`）：知识库向量检索（pgvector）用的 embedding 模型，与 chat 模型同档案 base-url/key
 - `AXIS_ENCRYPTION_PASSWORD` / `AXIS_ENCRYPTION_SALT`：DB 中 AI API key 加解密用，丢失则已加密 key 不可恢复，生产环境必须更换
 - `CORS_ORIGINS`（默认 `http://localhost:7788,http://localhost:3000`）/ `UPLOAD_DIR`（默认 `./uploads`）
 - `AXIS_API_BASE`：前端调用的后端地址（默认 `http://localhost:7789`）
