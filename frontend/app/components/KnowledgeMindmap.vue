@@ -104,8 +104,44 @@ onBeforeUnmount(() => {
     <div v-show="mode === 'map'" class="markmap-dark min-h-0 flex-1">
       <svg ref="svgRef" class="h-full w-full" />
     </div>
-    <div v-show="mode === 'outline'" class="min-h-0 flex-1 overflow-y-auto pr-2">
+    <div v-show="mode === 'outline'" class="mindmap-outline min-h-0 flex-1 overflow-y-auto pr-2">
       <MarkdownRenderer :content="content" />
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 大纲视图：产物是标题层级 Markdown，按层级缩进+收敛字号，呈现树形大纲而非文档排版 */
+.mindmap-outline :deep(h1) {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.4rem 0;
+}
+.mindmap-outline :deep(h2) {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0.35rem 0 0.2rem 1rem;
+  border: none;
+  padding: 0;
+}
+.mindmap-outline :deep(h3),
+.mindmap-outline :deep(h4) {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: hsl(var(--muted-foreground));
+  margin: 0.2rem 0;
+  border: none;
+  padding: 0;
+}
+.mindmap-outline :deep(h3) {
+  margin-left: 2rem;
+}
+.mindmap-outline :deep(h4) {
+  margin-left: 3rem;
+}
+.mindmap-outline :deep(h3)::before,
+.mindmap-outline :deep(h4)::before {
+  content: '–';
+  margin-right: 0.4rem;
+}
+</style>
