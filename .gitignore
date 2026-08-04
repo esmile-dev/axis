@@ -16,6 +16,9 @@ backend/target/
 # Daily Digest 运行产物（daily-YYYY-MM-DD.md）
 backend/inbox/
 
+# 文件上传运行产物（UPLOAD_DIR 默认 ./uploads）
+uploads/
+
 # Logs
 logs
 *.log
