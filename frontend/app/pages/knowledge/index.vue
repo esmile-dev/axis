@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import {
   BookOpen, FileText, StickyNote, Search, Plus, Cloud, CloudOff,
-  Tag, ExternalLink, ChevronLeft, Construction,
+  Tag, ExternalLink, ChevronLeft,
 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import KnowledgeItemCard from '@/components/KnowledgeItemCard.vue'
 import KnowledgeAddDialog from '@/components/KnowledgeAddDialog.vue'
-import type { KnowledgeItemDetail, KnowledgeItemSummary, KnowledgeStatus, KnowledgeType } from '@/types'
+import KnowledgeArtifactView from '@/components/KnowledgeArtifactView.vue'
+import KnowledgeMindmap from '@/components/KnowledgeMindmap.vue'
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import type { ArtifactStatus, KnowledgeItemDetail, KnowledgeItemSummary, KnowledgeStatus, KnowledgeType } from '@/types'
 
 const api = useApi()
 const route = useRoute()
@@ -55,17 +59,110 @@ const selectedId = ref<string | null>(null)
 const detail = ref<KnowledgeItemDetail | null>(null)
 const detailLoading = ref(false)
 
+// Detail tabs：脑图依赖 DOM 尺寸，首次切到该 tab 才挂载，之后 v-show 保活不销毁重建
+const activeTab = ref<'content' | 'summary' | 'mindmap'>('content')
+const mindmapMounted = ref(false)
+// 原文滚动容器：T-010 滚动进度记录/恢复基于此 ref
+const contentScrollRef = ref<HTMLElement | null>(null)
+
+watch(activeTab, (tab) => {
+  if (tab === 'mindmap') mindmapMounted.value = true
+})
+
+const summaryArtifact = computed(() => detail.value?.artifacts.find(a => a.kind === 'SUMMARY') ?? null)
+const mindmapArtifact = computed(() => detail.value?.artifacts.find(a => a.kind === 'MINDMAP') ?? null)
+
+// 产物轮询：PENDING/GENERATING 时每 3s 重拉详情，~90s 超时停止并提示手动刷新
+const POLL_INTERVAL_MS = 3000
+const POLL_TIMEOUT_MS = 90_000
+const pollTimedOut = ref(false)
+let pollTimer: ReturnType<typeof setInterval> | null = null
+let pollStartedAt = 0
+
+const isArtifactGenerating = (s: ArtifactStatus) => s === 'PENDING' || s === 'GENERATING'
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+function startPollingIfNeeded() {
+  stopPolling()
+  const d = detail.value
+  if (!d || (!isArtifactGenerating(d.summaryStatus) && !isArtifactGenerating(d.mindmapStatus))) return
+  pollStartedAt = Date.now()
+  pollTimer = setInterval(pollDetail, POLL_INTERVAL_MS)
+}
+
+async function pollDetail() {
+  const id = selectedId.value
+  if (!id) {
+    stopPolling()
+    return
+  }
+  if (Date.now() - pollStartedAt > POLL_TIMEOUT_MS) {
+    stopPolling()
+    pollTimedOut.value = true
+    return
+  }
+  try {
+    const fresh = await api<KnowledgeItemDetail>(`/api/knowledge/${id}`)
+    if (selectedId.value !== id) return // 轮询期间已切换条目
+    detail.value = fresh
+    if (!isArtifactGenerating(fresh.summaryStatus) && !isArtifactGenerating(fresh.mindmapStatus)) stopPolling()
+  } catch (err) {
+    console.error('Failed to poll knowledge item:', err) // 瞬时失败不中断，下个周期重试
+  }
+}
+
+// 快速连点只认最后一次选择（递增令牌使在途响应作废）
+let selectToken = 0
+
 async function selectItem(id: string) {
   if (selectedId.value === id) return
+  const token = ++selectToken
   selectedId.value = id
   detail.value = null
   detailLoading.value = true
+  stopPolling()
+  pollTimedOut.value = false
   try {
-    detail.value = await api<KnowledgeItemDetail>(`/api/knowledge/${id}`)
+    const fresh = await api<KnowledgeItemDetail>(`/api/knowledge/${id}`)
+    if (token !== selectToken) return
+    detail.value = fresh
+    startPollingIfNeeded()
   } catch (err) {
+    if (token !== selectToken) return
     console.error('Failed to load knowledge item:', err)
   } finally {
-    detailLoading.value = false
+    if (token === selectToken) detailLoading.value = false
+  }
+}
+
+watch(selectedId, (id) => {
+  if (!id) {
+    selectToken++ // 返回列表：作废在途请求并停轮询
+    stopPolling()
+    detail.value = null
+  }
+})
+
+onBeforeUnmount(stopPolling)
+
+async function regenerateArtifact(kind: 'SUMMARY' | 'MINDMAP') {
+  const d = detail.value
+  if (!d) return
+  try {
+    // 202 响应体即最新详情（目标状态已置 GENERATING），随后进入轮询
+    const fresh = await api<KnowledgeItemDetail>(`/api/knowledge/${d.id}/artifacts/${kind}/regenerate`, { method: 'POST' })
+    if (selectedId.value !== d.id) return
+    detail.value = fresh
+    pollTimedOut.value = false
+    startPollingIfNeeded()
+  } catch (err) {
+    console.error(`Failed to regenerate ${kind}:`, err)
   }
 }
 
@@ -268,36 +365,39 @@ onMounted(() => {
         </ScrollArea>
       </div>
 
-      <!-- Right: basic detail -->
+      <!-- Right: detail with 原文/总结/脑图 tabs -->
       <div
         class="flex-1 bg-background flex-col overflow-hidden"
         :class="selectedId ? 'flex' : 'hidden md:flex'"
       >
-        <ScrollArea class="flex-1">
-          <div class="max-w-2xl px-8 py-6">
-            <!-- Mobile back -->
-            <button
-              class="md:hidden flex items-center gap-1 mb-4 text-xs text-muted-foreground hover:text-foreground"
-              @click="selectedId = null"
-            >
-              <ChevronLeft class="w-3.5 h-3.5" />
-              返回列表
-            </button>
+        <!-- No selection -->
+        <div v-if="!selectedId" class="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+          <BookOpen class="w-12 h-12 mb-4 opacity-20" />
+          <p class="text-sm">Select an item to view details</p>
+        </div>
 
-            <!-- No selection -->
-            <div v-if="!selectedId" class="h-full flex flex-col items-center justify-center py-40 text-muted-foreground">
-              <BookOpen class="w-12 h-12 mb-4 opacity-20" />
-              <p class="text-sm">Select an item to view details</p>
-            </div>
+        <!-- Detail skeleton -->
+        <div v-else-if="detailLoading" class="flex-1 overflow-y-auto px-8 py-6">
+          <div class="max-w-2xl space-y-3">
+            <div class="h-7 w-2/3 rounded bg-secondary/40 animate-pulse" />
+            <div class="h-4 w-1/3 rounded bg-secondary/30 animate-pulse" />
+            <div class="h-4 w-1/2 rounded bg-secondary/30 animate-pulse" />
+          </div>
+        </div>
 
-            <!-- Detail skeleton -->
-            <div v-else-if="detailLoading" class="space-y-3">
-              <div class="h-7 w-2/3 rounded bg-secondary/40 animate-pulse" />
-              <div class="h-4 w-1/3 rounded bg-secondary/30 animate-pulse" />
-              <div class="h-4 w-1/2 rounded bg-secondary/30 animate-pulse" />
-            </div>
+        <div v-else-if="detail" class="flex-1 flex flex-col min-h-0">
+          <!-- Header -->
+          <div class="flex-shrink-0 px-8 pt-6">
+            <div class="max-w-2xl">
+              <!-- Mobile back -->
+              <button
+                class="md:hidden flex items-center gap-1 mb-4 text-xs text-muted-foreground hover:text-foreground"
+                @click="selectedId = null"
+              >
+                <ChevronLeft class="w-3.5 h-3.5" />
+                返回列表
+              </button>
 
-            <template v-else-if="detail">
               <h2 class="text-xl font-bold tracking-tight leading-snug">{{ detail.title }}</h2>
 
               <!-- Meta -->
@@ -350,21 +450,62 @@ onMounted(() => {
                   <span class="text-muted-foreground">{{ formatDateTime(detail.updatedAt) }}</span>
                 </div>
               </div>
-
-              <!-- T-009 placeholder -->
-              <div class="mt-8 border border-dashed border-border/60 rounded-xl p-8 text-center text-muted-foreground">
-                <Construction class="w-8 h-8 mx-auto mb-3 opacity-40" />
-                <p class="text-sm">详情视图施工中（T-009）</p>
-                <p class="text-xs mt-1">原文 / 总结 / 脑图 三视图将在下一任务上线</p>
-              </div>
-            </template>
-
-            <!-- Load failed -->
-            <div v-else class="py-20 text-center text-muted-foreground">
-              <p class="text-sm">详情加载失败，请稍后重试</p>
             </div>
           </div>
-        </ScrollArea>
+
+          <!-- Tabs：v-show 保活各视图组件状态 -->
+          <Tabs v-model="activeTab" class="flex-1 flex flex-col min-h-0 px-8 pb-6 mt-6">
+            <TabsList class="self-start flex-shrink-0">
+              <TabsTrigger value="content">原文</TabsTrigger>
+              <TabsTrigger value="summary">总结</TabsTrigger>
+              <TabsTrigger value="mindmap">脑图</TabsTrigger>
+            </TabsList>
+
+            <!-- 原文：滚动容器带 ref，供 T-010 滚动进度使用 -->
+            <div
+              v-show="activeTab === 'content'"
+              ref="contentScrollRef"
+              class="flex-1 min-h-0 mt-4 overflow-y-auto pr-2"
+            >
+              <MarkdownRenderer :content="detail.content" class="max-w-3xl" />
+            </div>
+
+            <!-- 总结 -->
+            <div v-show="activeTab === 'summary'" class="flex-1 min-h-0 mt-4 overflow-y-auto pr-2">
+              <KnowledgeArtifactView
+                kind="SUMMARY"
+                :status="detail.summaryStatus"
+                :artifact="summaryArtifact"
+                :timed-out="pollTimedOut"
+                @regenerate="regenerateArtifact('SUMMARY')"
+              >
+                <template #default="{ artifact }">
+                  <MarkdownRenderer :content="artifact.content" class="max-w-3xl" />
+                </template>
+              </KnowledgeArtifactView>
+            </div>
+
+            <!-- 脑图 -->
+            <div v-show="activeTab === 'mindmap'" class="flex-1 min-h-0 mt-4">
+              <KnowledgeArtifactView
+                kind="MINDMAP"
+                :status="detail.mindmapStatus"
+                :artifact="mindmapArtifact"
+                :timed-out="pollTimedOut"
+                @regenerate="regenerateArtifact('MINDMAP')"
+              >
+                <template #default="{ artifact }">
+                  <KnowledgeMindmap v-if="mindmapMounted" :content="artifact.content" />
+                </template>
+              </KnowledgeArtifactView>
+            </div>
+          </Tabs>
+        </div>
+
+        <!-- Load failed -->
+        <div v-else class="flex-1 flex items-center justify-center text-muted-foreground">
+          <p class="text-sm">详情加载失败，请稍后重试</p>
+        </div>
       </div>
     </div>
 
