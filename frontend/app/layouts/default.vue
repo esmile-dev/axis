@@ -85,25 +85,27 @@ function handleCreateKnowledge() {
 
         <!-- Projects Section -->
         <div class="pt-2">
-          <button
-            @click="projectsExpanded = !projectsExpanded"
-            class="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all w-full hover:bg-accent hover:text-accent-foreground group"
-          >
-            <FolderKanban class="w-4 h-4 transition-transform group-hover:scale-110" />
-            <span class="flex-1 text-left">Projects</span>
-            <ChevronDown v-if="projectsExpanded" class="w-3 h-3 text-muted-foreground" />
-            <ChevronRight v-else class="w-3 h-3 text-muted-foreground" />
-          </button>
+          <div class="flex items-center gap-1">
+            <NuxtLink
+              to="/projects"
+              class="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all flex-1 hover:bg-accent hover:text-accent-foreground group"
+              :class="{ 'bg-accent text-accent-foreground shadow-sm': route.path === '/projects' }"
+            >
+              <FolderKanban class="w-4 h-4 transition-transform group-hover:scale-110" />
+              Projects
+            </NuxtLink>
+            <button
+              @click="projectsExpanded = !projectsExpanded"
+              class="p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-all"
+              :aria-label="projectsExpanded ? 'Collapse projects' : 'Expand projects'"
+            >
+              <ChevronDown v-if="projectsExpanded" class="w-3 h-3 text-muted-foreground" />
+              <ChevronRight v-else class="w-3 h-3 text-muted-foreground" />
+            </button>
+          </div>
 
           <Transition name="expand">
             <div v-if="projectsExpanded" class="ml-4 space-y-0.5 mt-1">
-              <NuxtLink
-                to="/projects"
-                class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all"
-                active-class="bg-accent text-accent-foreground"
-              >
-                All Projects
-              </NuxtLink>
               <NuxtLink
                 v-for="project in projects"
                 :key="project.id"
