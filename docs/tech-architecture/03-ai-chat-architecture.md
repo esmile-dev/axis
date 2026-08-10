@@ -208,7 +208,7 @@ Spring AI 的 `MessageType` 有四种（对应 OpenAI 的 role）：**SYSTEM / U
 设计上有意思的地方在于：**写入时机由 Agent 自己决策，而不是规则代码**。
 
 - **写入**：`MemoryTool.saveMemory` 是一个普通 Tool，system prompt 里明确告诉模型何时调用（`AgentService.systemPrompt()`）：「当用户表达值得跨会话记住的偏好、习惯或重要事实（或明确要求『记住』）时，调用 saveMemory」。
-- **注入**：`systemPrompt()` 每次请求把 `chat_long_memory` 全量（`findTop50ByOrderByCreatedAtAsc`，上限 50 条）拼在基础 prompt 尾部（`:61-64`）。
+- **注入**：`systemPrompt()` 每次请求把 `chat_long_memory` 拼在基础 prompt 尾部（`:61-64`），上限 50 条。注意必须 `findTop50ByOrderByCreatedAtDesc`（取**最新** 50 条）——用 Asc 会让第 51 条起的记忆永远进不了 prompt（2026-08-03 修复）。
 - **管理**：用户也可在聊天页「长期记忆」Dialog 里手动查看/删除（REST 走 axis-service 的 `ChatHistoryController`，`/api/agent/memories*`）。
 
 为什么走 prompt 注入而不是塞进对话历史？因为长期记忆是**系统级上下文**（「你是谁、用户是谁」），不是对话内容；放 system prompt 里模型权重最高，也不会被滑动窗口挤掉。

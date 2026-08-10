@@ -45,7 +45,7 @@ public class ChatHistoryService {
     }
 
     public List<ChatLongMemory> listMemories() {
-        return longMemoryRepository.findTop50ByOrderByCreatedAtAsc();
+        return longMemoryRepository.findTop50ByOrderByCreatedAtDesc();
     }
 
     public ChatLongMemory saveMemory(String content) {
