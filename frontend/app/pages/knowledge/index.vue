@@ -2,7 +2,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
   BookOpen, FileText, StickyNote, Search, Plus, Cloud, CloudOff,
-  Tag, ExternalLink, ChevronLeft, ChevronDown, X, Sparkles,
+  Tag, ExternalLink, ChevronLeft, ChevronDown, X, Sparkles, Trash2,
 } from 'lucide-vue-next'
 import {
   DropdownMenu,
@@ -203,6 +203,20 @@ async function updateStatus(status: KnowledgeStatus) {
     if (detail.value === d) d.status = previous
     localFirst.updateItem(d.id, { status: previous })
     console.error('Failed to update knowledge status:', err)
+  }
+}
+
+// 删除条目：服务端级联清理 artifacts + 向量分块，本地移除并回到未选中态
+async function deleteItem() {
+  const d = detail.value
+  if (!d) return
+  if (!confirm(`确定删除「${d.title}」？此操作不可恢复。`)) return
+  try {
+    await api(`/api/knowledge/${d.id}`, { method: 'DELETE' })
+    localFirst.removeItem(d.id)
+    selectedId.value = null
+  } catch (err) {
+    console.error('Failed to delete knowledge item:', err)
   }
 }
 
@@ -533,31 +547,44 @@ onMounted(() => {
         <div v-else-if="detail" class="flex-1 flex flex-col min-h-0">
           <!-- Header -->
           <div class="flex-shrink-0 px-8 pt-6">
-            <div class="max-w-2xl">
-              <!-- Mobile back -->
-              <button
-                class="md:hidden flex items-center gap-1 mb-4 text-xs text-muted-foreground hover:text-foreground"
-                @click="selectedId = null"
-              >
-                <ChevronLeft class="w-3.5 h-3.5" />
-                返回列表
-              </button>
+            <!-- 标题行占满面板宽度：操作按钮钉在面板右缘，与页头「添加」对齐 -->
+            <div class="flex items-start justify-between gap-4">
+              <div class="max-w-2xl min-w-0">
+                <!-- Mobile back -->
+                <button
+                  class="md:hidden flex items-center gap-1 mb-4 text-xs text-muted-foreground hover:text-foreground"
+                  @click="selectedId = null"
+                >
+                  <ChevronLeft class="w-3.5 h-3.5" />
+                  返回列表
+                </button>
 
-              <div class="flex items-start justify-between gap-4">
                 <h2 class="text-xl font-bold tracking-tight leading-snug">{{ detail.title }}</h2>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
-                  class="h-7 px-2.5 text-xs shrink-0 bg-secondary/20 border-border/40 hover:bg-secondary/40"
+                  class="h-7 px-2.5 text-xs bg-secondary/20 border-border/40 hover:bg-secondary/40"
                   :class="{ 'bg-secondary/50 text-foreground': qaOpen }"
                   @click="qaOpen = !qaOpen"
                 >
                   <Sparkles class="w-3 h-3 mr-1" />
                   AI 问答
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  @click="deleteItem"
+                >
+                  <Trash2 class="w-3.5 h-3.5" />
+                </Button>
               </div>
+            </div>
 
-              <!-- Meta -->
+            <!-- Meta -->
+            <div class="max-w-2xl">
               <div class="mt-4 space-y-2 text-sm">
                 <div class="flex gap-3">
                   <span class="w-20 flex-shrink-0 text-muted-foreground">类型</span>
