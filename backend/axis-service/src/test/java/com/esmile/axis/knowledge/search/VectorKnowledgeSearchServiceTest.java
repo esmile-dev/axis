@@ -30,7 +30,7 @@ class VectorKnowledgeSearchServiceTest {
     private KnowledgeItemRepository itemRepository;
 
     private VectorKnowledgeSearchService service() {
-        return new VectorKnowledgeSearchService(vectorStore, new KeywordKnowledgeSearchService(itemRepository));
+        return new VectorKnowledgeSearchService(() -> vectorStore, new KeywordKnowledgeSearchService(itemRepository));
     }
 
     @Test
@@ -95,5 +95,21 @@ class VectorKnowledgeSearchServiceTest {
         when(itemRepository.search(null, null, null, "q")).thenReturn(List.of());
 
         assertThatCode(() -> assertThat(service().search("q")).isEmpty()).doesNotThrowAnyException();
+    }
+
+    @Test
+    void search_storeNull_degradesToKeyword() {
+        // store 降级中（pgvector 缺失/重建失败）→ 直接走关键词检索
+        KnowledgeItem item = KnowledgeItem.builder()
+                .type(KnowledgeType.NOTE).title("降级命中").content("content").build();
+        item.setId("i9");
+        when(itemRepository.search(null, null, null, "q")).thenReturn(List.of(item));
+        VectorKnowledgeSearchService degraded = new VectorKnowledgeSearchService(() -> null,
+                new KeywordKnowledgeSearchService(itemRepository));
+
+        List<KnowledgeSearchHit> hits = degraded.search("q");
+
+        assertThat(hits).hasSize(1);
+        assertThat(hits.get(0).itemId()).isEqualTo("i9");
     }
 }

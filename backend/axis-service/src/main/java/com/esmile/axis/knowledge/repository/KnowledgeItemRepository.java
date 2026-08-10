@@ -13,6 +13,10 @@ public interface KnowledgeItemRepository extends JpaRepository<KnowledgeItem, St
 
     List<KnowledgeItem> findAllByOrderByCreatedAtDesc();
 
+    /** 全量重建向量索引用：只取 id，避免把全部 content 拉进内存。 */
+    @Query("SELECT k.id FROM KnowledgeItem k")
+    List<String> findAllIds();
+
     /** 列表筛选：四个参数均可空（null = 不筛选），q 匹配 title 与 content（大小写不敏感）。CAST 为防 PostgreSQL 把 null 参数推断成 bytea。 */
     @Query("""
             SELECT k FROM KnowledgeItem k

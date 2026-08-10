@@ -94,3 +94,4 @@ created: 2026-08-03
 |------|----------|------|
 | 2026-08-03 | 初稿 | 2.0 立项（全网调研 + 六项关键决策确认） |
 | 2026-08-04 | FR-008 转入细节改为三路分流：content 为 URL 走抓取 → 否则 `link` 为合法 http(s) URL（DIGEST 条目）走抓取 → 否则 NOTE | T-007 审查发现 DIGEST 条目 URL 在 link 字段，原逻辑只产出标题壳 NOTE |
+| 2026-08-06 | 「检索」行「异步分块（~1000 字符、重叠 100）」被取代：分块升级为清洗 + 递归句边界切分（≤500 token、重叠取整句 ≤50 token、标题前置），见 `docs/feature/knowledge-chunking/lite-spec.md` | chunker P0 实施完成，本文参数描述过时 |

@@ -148,3 +148,4 @@ sequenceDiagram
 | 2026-08-04 | 总结 prompt（`KnowledgePrompts.PROMPT_SUMMARY`）补充「三节缺一不可，即使原文简短关键洞察也必须保留至少 1 条」 | T-006 次轮全量评测结构合格率 9/10：en-02 短文缺失「关键洞察」节；按 T-006 简报授权迭代 prompt 后重跑 |
 | 2026-08-04 | from-inbox 转入逻辑改三路分流：`KnowledgeService.createFromInbox` 在 content 非 URL 时检查条目 `link`，合法 http(s) URL 则走抓取管线（DIGEST 条目 URL 在 link、content 只存标题） | T-007 审查发现 DIGEST 条目 URL 在 link 字段，原逻辑只产出标题壳 NOTE |
 | 2026-08-04 | 已知接受风险登记（本地单人威胁模型）：①抓取/粘贴内容经 marked v-html 渲染无消毒（XSS 面，修法 DOMPurify 或 jsoup Safelist，留 backlog）；②/api/knowledge/fetch 与 from-inbox 无 SSRF 防护（可抓内网/元数据地址，修法解析后校验 InetAddress 拒私网段，留 backlog）；③include-message:always 与 multipart 20MB 为全局生效，外溢至既有端点 | 终审安全审查结论，项目未上线暂不阻断 |
+| 2026-08-06 | §6 Embedding 行「分块 ~1000 字符重叠 100」被取代：分块算法升级为清洗 + 递归句边界切分（≤500 token、重叠取整句 ≤50 token、标题前置），见 `docs/feature/knowledge-chunking/lite-spec.md` | chunker P0 实施完成，本文参数描述过时 |

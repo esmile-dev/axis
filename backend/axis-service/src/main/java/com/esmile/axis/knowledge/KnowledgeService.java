@@ -173,6 +173,13 @@ public class KnowledgeService {
         knowledgeIndexService.removeItem(id);
     }
 
+    /** 全量重建向量索引（分块算法或 embedding 配置变更后使用）；indexItem 幂等且内部捕获异常，逐条先删后写。 */
+    public int reindexAll() {
+        List<String> ids = itemRepository.findAllIds();
+        ids.forEach(knowledgeIndexService::indexItem);
+        return ids.size();
+    }
+
     /**
      * Re-run generation for one artifact. The regeneration event fires after this
      * transaction commits, so the async worker never races the GENERATING write

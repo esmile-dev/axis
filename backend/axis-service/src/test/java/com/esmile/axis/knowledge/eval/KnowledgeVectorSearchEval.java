@@ -40,12 +40,29 @@ import static org.assertj.core.api.Assertions.assertThat;
  * vector extension enabled and (b) {@code AI_API_KEY} is a real key. Connection
  * settings come from {@code DATABASE_URL}/{@code DB_USERNAME}/{@code DB_PASSWORD}
  * (defaults match application.yml); embedding model from {@code AI_EMBEDDING_MODEL}
- * (default text-embedding-3-small).
+ * (default text-embedding-3-small). Embedding options fix {@code dimensions=1536} to match
+ * {@code AiConfigService} / the vector_store table (variable-dimension models like 智谱
+ * embedding-3 default to 3072 otherwise and the insert fails).
  */
 class KnowledgeVectorSearchEval {
 
     private static final String ITEM_JVM = "eval-vector-jvm";
     private static final String ITEM_RECIPE = "eval-vector-recipe";
+    private static final String ITEM_HNSW = "eval-vector-hnsw";
+
+    /** 图文混排长文：图片/锚点噪声 + 细节埋在文中部（knowledge-chunking 评测增强样例）。 */
+    private static final String HNSW_CONTENT = """
+            ![](https://cdn.example.com/banner.png)
+            ## 为什么需要向量索引 {#why}
+            暴力扫描在百万级向量上延迟无法接受，近似最近邻索引用精度换速度。
+            ![](https://cdn.example.com/arch.png)
+            ## HNSW 的参数 {#params}
+            HNSW 索引中，m 参数决定图里每个节点的最大连接数。增大 m 提升召回率，
+            但每个节点的内存开销近似线性增长，生产上通常取 16 到 64 之间权衡。
+            ![](https://cdn.example.com/bench.png)
+            ## 选型建议 {#choice}
+            小规模语料直接用 pgvector 复用业务库即可，百万级以上再考虑专用向量库。
+            """;
 
     private static DriverManagerDataSource dataSource;
     private static VectorStore vectorStore;
@@ -68,6 +85,7 @@ class KnowledgeVectorSearchEval {
                 .apiKey(apiKey)
                 .baseUrl(System.getenv().getOrDefault("AI_BASE_URL", "https://api.openai.com"))
                 .model(embeddingModel)
+                .dimensions(1536) // 对齐 AiConfigService.EMBEDDING_DIMENSIONS / vector_store 表
                 .build();
         PgVectorStore store = PgVectorStore.builder(new JdbcTemplate(dataSource),
                         OpenAiEmbeddingModel.builder().options(opts).build())
@@ -80,7 +98,7 @@ class KnowledgeVectorSearchEval {
     @AfterAll
     static void tearDown() {
         if (vectorStore != null) {
-            for (String itemId : List.of(ITEM_JVM, ITEM_RECIPE)) {
+            for (String itemId : List.of(ITEM_JVM, ITEM_RECIPE, ITEM_HNSW)) {
                 vectorStore.delete(new FilterExpressionBuilder()
                         .eq(KnowledgeIndexService.META_ITEM_ID, itemId).build());
             }
@@ -96,11 +114,11 @@ class KnowledgeVectorSearchEval {
         stubItem(itemRepository, ITEM_RECIPE, "番茄意面食谱",
                 "番茄去皮切块，橄榄油爆香蒜末，小火熬煮二十分钟，加盐与罗勒调味，拌入煮好的意面即可。");
 
-        VectorKnowledgeIndexService indexService = new VectorKnowledgeIndexService(vectorStore, itemRepository);
+        VectorKnowledgeIndexService indexService = new VectorKnowledgeIndexService(() -> vectorStore, itemRepository);
         indexService.indexItem(ITEM_JVM);
         indexService.indexItem(ITEM_RECIPE);
 
-        VectorKnowledgeSearchService searchService = new VectorKnowledgeSearchService(vectorStore,
+        VectorKnowledgeSearchService searchService = new VectorKnowledgeSearchService(() -> vectorStore,
                 new KeywordKnowledgeSearchService(itemRepository));
         // 语义相近但不含标题/正文原词（"垃圾回收" 未在标题出现，"Java" 全文未出现）
         List<KnowledgeSearchHit> hits = searchService.search("Java 垃圾回收停顿怎么排查");
@@ -108,6 +126,27 @@ class KnowledgeVectorSearchEval {
         System.out.printf("KnowledgeVectorSearchEval hits=%s%n", hits);
         assertThat(hits).isNotEmpty();
         assertThat(hits.get(0).itemId()).as("语义最相关条目应排第一").isEqualTo(ITEM_JVM);
+    }
+
+    @Test
+    void detailQueryInImageHeavyDoc_ranksTargetFirst() {
+        KnowledgeItemRepository itemRepository = Mockito.mock(KnowledgeItemRepository.class);
+        stubItem(itemRepository, ITEM_HNSW, "向量数据库学习笔记", HNSW_CONTENT);
+        stubItem(itemRepository, ITEM_RECIPE, "番茄意面食谱",
+                "番茄去皮切块，橄榄油爆香蒜末，小火熬煮二十分钟，加盐与罗勒调味，拌入煮好的意面即可。");
+
+        VectorKnowledgeIndexService indexService = new VectorKnowledgeIndexService(() -> vectorStore, itemRepository);
+        indexService.indexItem(ITEM_HNSW);
+        indexService.indexItem(ITEM_RECIPE);
+
+        VectorKnowledgeSearchService searchService = new VectorKnowledgeSearchService(() -> vectorStore,
+                new KeywordKnowledgeSearchService(itemRepository));
+        // 针对文中部细节的语义查询：不含标题原词，"m 参数/连接数" 细节只在第二节中部出现
+        List<KnowledgeSearchHit> hits = searchService.search("图索引节点连接数调大对内存的影响");
+
+        System.out.printf("KnowledgeVectorSearchEval(image-heavy) hits=%s%n", hits);
+        assertThat(hits).isNotEmpty();
+        assertThat(hits.get(0).itemId()).as("图文混排文档的文中部细节应命中该条目").isEqualTo(ITEM_HNSW);
     }
 
     private static void stubItem(KnowledgeItemRepository repo, String id, String title, String content) {

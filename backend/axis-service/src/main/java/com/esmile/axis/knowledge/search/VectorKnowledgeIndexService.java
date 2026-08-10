@@ -39,7 +39,7 @@ public class VectorKnowledgeIndexService implements KnowledgeIndexService {
         KnowledgeItem item = found.get();
         try {
             deleteVectors(vectorStore, itemId);
-            List<Document> docs = KnowledgeChunker.chunk(item.getContent()).stream()
+            List<Document> docs = KnowledgeChunker.chunk(item.getTitle(), item.getContent()).stream()
                     .map(chunk -> new Document(chunk,
                             Map.of(META_ITEM_ID, itemId, META_TITLE, item.getTitle())))
                     .toList();

@@ -5,6 +5,7 @@ import com.esmile.axis.knowledge.dto.FetchKnowledgeRequest;
 import com.esmile.axis.knowledge.dto.FromInboxRequest;
 import com.esmile.axis.knowledge.dto.KnowledgeItemDetailView;
 import com.esmile.axis.knowledge.dto.KnowledgeItemSummaryView;
+import com.esmile.axis.knowledge.dto.ReindexResponse;
 import com.esmile.axis.knowledge.dto.UpdateKnowledgeItemRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -73,5 +74,10 @@ public class KnowledgeController {
     public ResponseEntity<KnowledgeItemDetailView> regenerateArtifact(
             @PathVariable String id, @PathVariable ArtifactKind kind) {
         return ResponseEntity.accepted().body(knowledgeService.regenerateArtifact(id, kind));
+    }
+
+    @PostMapping("/reindex")
+    public ReindexResponse reindex() {
+        return new ReindexResponse(knowledgeService.reindexAll());
     }
 }

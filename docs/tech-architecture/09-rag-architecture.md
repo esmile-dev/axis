@@ -78,6 +78,43 @@ created: 2026-08-04
 
 本项目里 RAG 思想以**两种不同形态**落地，且第二种恰恰是「有意不用 R」——这个辨析是理解 RAG 适用边界的最佳案例。
 
+### 全链路一张图（摄取 → 加工 → 索引 → 检索）
+
+```mermaid
+flowchart TD
+    subgraph INGEST["摄取：三路归一化（见 07）"]
+        PASTE["粘贴创建"] --> ITEM
+        URL["URL 抓取<br/>WebPageFetcher → ArticleExtractor"] --> ITEM
+        FILE["文件导入<br/>ImportedFileParser → KnowledgeFileStorage"] --> ITEM
+        ITEM[("knowledge_item<br/>content = Markdown 原文")]
+    end
+
+    subgraph PIPE["异步加工：AFTER_COMMIT 事件（见 06）"]
+        GEN["KnowledgeArtifactGenerator<br/>SUMMARY / MINDMAP 状态机"]
+        IDX["indexItem：幂等，先删旧块再写新块"]
+        GEN --> IDX
+    end
+
+    subgraph INDEX["索引：分块 + embedding"]
+        CHUNK["KnowledgeChunker 分块<br/>清洗图片/锚点噪声 → 递归句边界切分 ≤500 token<br/>重叠取整句 ≤50 token + 标题前置"]
+        EMB["EmbeddingModel<br/>激活 EMBEDDING 档案 / text-embedding-3-small"]
+        STORE[("vector_store（pgvector）<br/>content + metadata: item_id, title")]
+        CHUNK --> EMB --> STORE
+    end
+
+    subgraph SEARCH["检索：agentic RAG + 降级链"]
+        TOOL["Agent 调 searchDocuments(keyword)"] --> DECIDE{"VectorStore 可用？"}
+        DECIDE -->|是| ANN["embedding(query) → ANN topK=5<br/>按 item_id 去重 → 标题 + snippet + item_id"]
+        DECIDE -->|降级| FALLBACK["LIKE 关键词检索 + WARN<br/>（扩展缺失 / 装配失败 / embedding 异常）"]
+    end
+
+    ITEM -->|"KnowledgeItemCreatedEvent"| GEN
+    IDX --> CHUNK
+    STORE -.->|similaritySearch| ANN
+```
+
+图中未画边的两条规则：**索引生命周期**——条目删除走 `removeItem` 按 `item_id` filter 清向量（防索引腐烂）；条目内容更新由 `indexItem` 幂等重建（分块算法/embedding 变更后走 `POST /api/knowledge/reindex` 全量重建）。分块算法的实测依据见 `docs/feature/knowledge-chunking/lite-spec.md`。
+
 ### 用法一：Agent 语义检索（agentic RAG 形态）
 
 ```
@@ -87,7 +124,7 @@ Agent 对话中模型决定调 searchDocuments(keyword)
   → 返回 [标题 + snippet(~200字) + item_id] 给模型组织回答
 ```
 
-- 索引侧：条目创建后经异步管线**分块（1000 字符/重叠 100）** → embedding → `PgVectorStore`（metadata 带 `item_id`）
+- 索引侧：条目创建后经异步管线**分块（清洗图片/锚点噪声 → 递归句边界切分 ≤500 token，重叠取整句 ≤50 token，标题前置进嵌入文本）** → embedding → `PgVectorStore`（metadata 带 `item_id`）
 - **索引生命周期**：条目删除按 `item_id ==` filter 清向量（防索引腐烂）；重建入口幂等备妥
 - **降级**：扩展缺失/装配失败/embedding 失败三层降级到关键词检索（见 08 文档）
 - 这是 agentic RAG：**检索是 Agent 的工具，何时搜由模型判断**，而非固定管线
@@ -106,14 +143,14 @@ Agent 对话中模型决定调 searchDocuments(keyword)
 
 | 环节 | 本项目 | 业界常见 | 理由 |
 |---|---|---|---|
-| 分块 | 1000 字符/重叠 100，定长 | 250~500 token，按结构 | 文章类语料，定长+重叠够稳；结构分块留演进 |
+| 分块 | ≤500 token 递归切分（段落→句末），重叠取整句 ≤50 token；清洗图片/锚点噪声 + 标题前置 | 250~500 token，按结构 | golden 集实测：坏边界率 96%→1.2%，近噪声块 5→0（knowledge-chunking） |
 | Embedding | text-embedding-3-small（可配） | 同左 / bge 系开源 | 复用 AI 档案零新成本；中文敏感场景可换 bge |
 | 向量库 | pgvector（复用 PG） | Qdrant/Milvus | 几千块全表距离毫秒级；与业务数据同事务；零新组件 |
 | topK | 5 | 3~10 | Agent 场景宁缺毋滥 |
 | Rerank | 未做 | 交叉编码器 | 语料小，先观察命中率再补 |
 | Hybrid | 未做（向量 or 关键词二选一降级） | RRF 融合 | 演进方向 |
 | 引用 | snippet 原文返回 Agent，答案未带逐句引用 | 引用标注 | 演进方向 |
-| 检索质量评测 | `KnowledgeVectorSearchEval`（语义近义词命中，门控） | hit rate/MRR | 装 pgvector 后复验（backlog B-003） |
+| 检索质量评测 | `KnowledgeVectorSearchEval`（语义近义词命中 + 图文混排细节查询，门控） | hit rate/MRR | 2026-08-06 已复验通过（B-003 关闭） |
 
 ## 7. 面试问答速记
 
@@ -133,10 +170,12 @@ A：看规模与运维：几千~几万块 pgvector 足够（全表距离毫秒�
 A：有——检索不到、lost in the middle、模型无视检索内容都会幻觉。评估分检索质量（hit rate）与生成质量（faithfulness，judge），超纲拒答样例计入通过率。
 
 **Q：你的项目里 RAG 怎么用的？**
-A：两种形态——Agent 全局检索是 agentic RAG（检索是工具，分块 1000/100 入 pgvector，三层降级）；条目问答有意不用 R，因为语料是单文档且装得下上下文，整篇注入比 topK 更可靠。**能讲清「什么时候不需要 RAG」比会搭 RAG 更见功底。**
+A：两种形态——Agent 全局检索是 agentic RAG（检索是工具，分块 ≤500 token 句边界递归切入 pgvector，三层降级）；条目问答有意不用 R，因为语料是单文档且装得下上下文，整篇注入比 topK 更可靠。**能讲清「什么时候不需要 RAG」比会搭 RAG 更见功底。**
 
 ## 变更记录
 
 | 日期 | 变更内容 | 原因 |
 |------|----------|------|
 | 2026-08-04 | 初稿 | 知识库 2.0 复盘系列第 5 讲沉淀，用户要求 RAG 科普 + 项目对照 |
+| 2026-08-06 | §6 增补全链路 mermaid 架构图（摄取→加工→索引→检索），标注 chunker P0 优化落点 | chunker 优化讨论（现 `docs/feature/knowledge-chunking/lite-spec.md`）中发现缺端到端单图，各段图散落在 05/06/07/09 |
+| 2026-08-06 | 分块参数全面更新为 knowledge-chunking 落地结果（递归句边界切分 ≤500 token / 清洗 / 标题前置），含 reindex 入口说明 | chunker P0 实施完成并验证，文档与代码同步 |

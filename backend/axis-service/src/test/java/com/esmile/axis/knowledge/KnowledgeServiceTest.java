@@ -450,6 +450,17 @@ class KnowledgeServiceTest {
     }
 
     @Test
+    void reindexAll_rebuildsEveryItem() {
+        when(itemRepository.findAllIds()).thenReturn(List.of("i1", "i2"));
+
+        int count = service.reindexAll();
+
+        assertThat(count).isEqualTo(2);
+        verify(knowledgeIndexService).indexItem("i1");
+        verify(knowledgeIndexService).indexItem("i2");
+    }
+
+    @Test
     void regenerateArtifact_existing_marksGeneratingAndPublishesEvent() {
         KnowledgeItem item = item("i1", "标题");
         when(itemRepository.findById("i1")).thenReturn(Optional.of(item));

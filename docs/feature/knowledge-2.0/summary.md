@@ -26,7 +26,7 @@ created: 2026-08-04
 
 ## 衍生需求 / 后续优化
 
-- backlog（tasks.md 已登记）：B-001 会话前缀过滤、B-002 createDocument 走管线、B-003 pgvector 装扩展后复验、B-004 档案热切换刷新 EmbeddingModel、B-005 渲染消毒（XSS）、B-006 SSRF 防护
+- backlog（tasks.md 已登记）：B-001 会话前缀过滤、B-002 createDocument 走管线、~~B-003 pgvector 装扩展后复验~~（2026-08-06 已复验）、~~B-004 档案热切换刷新 EmbeddingModel~~（2026-08-06 已修复）、B-005 渲染消毒（XSS）、B-006 SSRF 防护
 - P3：播客/视频转录（类型枚举已预留，转录产物走 TRANSCRIPT artifact 即可接入现有管线）
 - 相关推荐/自动关联（沿用 spike `knowledge-auto-linking` 结论，向量设施已就位）、高亮批注、超长文 map-reduce 总结
 - 评测方法论：judge 换独立模型消除同模型自评偏倚
