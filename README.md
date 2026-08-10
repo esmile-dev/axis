@@ -21,7 +21,7 @@
 - **Spring Boot 4.0** + **Spring Framework 7.0** + **Java 17**
 - **Spring Data JPA** + Hibernate
 - **Spring AI 2.0** (Agent + ChatClient + Tool Calling)
-- **PostgreSQL**（共用 axis schema）
+- **PostgreSQL 18** + **pgvector** 扩展（知识库向量检索）
 - **Maven** 构建
 
 ## 项目结构
@@ -54,7 +54,7 @@ axis/
 
 ### 1. 启动 PostgreSQL
 
-确保本地有 PostgreSQL，且 `axis` 数据库已创建（schema 名为 `axis`）。
+确保本地已安装并运行 PostgreSQL 18（含 pgvector 扩展），且 `axis` 数据库已创建、库内已执行 `CREATE EXTENSION vector`。
 
 ### 2. 启动后端（端口 8080）
 

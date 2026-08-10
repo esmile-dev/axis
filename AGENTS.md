@@ -23,7 +23,7 @@
 
 - **前端**：Nuxt 4 + Vue 3 Composition API + TypeScript；Pinia + VueUse 状态管理；Tailwind CSS + Shadcn-Vue（基于 Reka UI）+ Lucide Vue Next 图标；`marked` 渲染 Markdown
 - **后端**：Spring Boot 4.0 + Spring Framework 7.0 + Java 21；Spring Data JPA + Hibernate；Spring AI 2.0（ChatClient + Tool Calling）；Maven 多模块构建
-- **数据库**：PostgreSQL（本地默认 `axis` 库；Flyway 管 schema + `ddl-auto: validate`；开发期改表直接改 `V1__init.sql` 后重建本地库，不写增量迁移脚本）
+- **数据库**：PostgreSQL 18 + pgvector 扩展（本地默认 `axis` 库；Flyway 管 schema + `ddl-auto: validate`；开发期改表直接改 `V1__init.sql` 后重建本地库，不写增量迁移脚本；`vector_store` 表由 PgVectorStore 启动时自建）
 
 ## 仓库结构
 
@@ -76,7 +76,7 @@ cd backend && mvn compile           # 编译
 cd backend && mvn package           # 打包可执行 fat jar
 ```
 
-前置条件：本地 PostgreSQL 已运行且存在 `axis` 数据库。
+前置条件：本地 PostgreSQL 18 已运行且存在 `axis` 数据库，库内已启用 pgvector（`CREATE EXTENSION vector`；Homebrew 安装：`brew install postgresql@18 pgvector`）。
 
 ## 测试
 
@@ -118,6 +118,14 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 - `AXIS_ENCRYPTION_PASSWORD` / `AXIS_ENCRYPTION_SALT`：DB 中 AI API key 加解密用，丢失则已加密 key 不可恢复，生产环境必须更换
 - `CORS_ORIGINS`（默认 `http://localhost:7788,http://localhost:3000`）/ `UPLOAD_DIR`（默认 `./uploads`）
 - `AXIS_API_BASE`：前端调用的后端地址（默认 `http://localhost:7789`）
+
+**Agent 只读数据库访问**：查数/排障一律用 `axis_readonly` 角色（SELECT-only，已授权 `axis` 库全表含未来新表），不用 `alan`/`postgres` 超级用户做只读查询：
+
+```bash
+psql "postgresql://axis_readonly:axis_readonly@localhost:5432/axis"
+```
+
+（本地 trust 认证不校验密码，这里的密码仅为文档化；建表/改表等 DDL 才用管理角色。）
 
 ## 开发流程（Spec-Driven，开工前必读 `docs/workflow.md`）
 
