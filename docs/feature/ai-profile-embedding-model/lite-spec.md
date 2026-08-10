@@ -34,10 +34,10 @@ flowchart LR
 
 | ✓ | 任务 | 验收点 | Commit |
 |---|------|--------|--------|
-| ☑ | T-001 `V1__init.sql` + `AiConfigProfile` + ConfigController DTO 加 `embeddingModel`；运行库 `ALTER TABLE` | 编译通过；建/改档案接口带得上字段 | 待提交 |
-| ☑ | T-002 `AiConfigService.getEmbeddingModel()` 三级取值 + 单测（档案值/空走 env/全空走默认） | 新增单测全绿 | 待提交 |
-| ☑ | T-003 Settings 档案表单加「Embedding 模型」可选输入框（placeholder `text-embedding-3-small`） | UI 截图验证：填写/留空两种保存均正常 | 待提交 |
-| ☑ | T-004 AGENTS.md 补档案字段优先级；`mvn test -pl axis-service` 全绿 | FR-001~003 验收记录填齐 | 待提交 |
+| ☑ | T-001 `V1__init.sql` + `AiConfigProfile` + ConfigController DTO 加 `embeddingModel`；运行库 `ALTER TABLE` | 编译通过；建/改档案接口带得上字段 | 5bac4e2 |
+| ☑ | T-002 `AiConfigService.getEmbeddingModel()` 三级取值 + 单测（档案值/空走 env/全空走默认） | 新增单测全绿 | 5bac4e2 |
+| ☑ | T-003 Settings 档案表单加「Embedding 模型」可选输入框（placeholder `text-embedding-3-small`） | UI 截图验证：填写/留空两种保存均正常 | 5bac4e2 |
+| ☑ | T-004 AGENTS.md 补档案字段优先级；`mvn test -pl axis-service` 全绿 | FR-001~003 验收记录填齐 | 5bac4e2 |
 
 ## 4. 验收记录
 

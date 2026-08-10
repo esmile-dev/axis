@@ -37,14 +37,14 @@ flowchart TD
 
 | ✓ | 任务 | 验收点 | Commit |
 |---|------|--------|--------|
-| ☑ | T-001 数据模型：`type` 列 + 撤 `embedding_model` 列（V1__init.sql + 运行库 ALTER + 实体 `AiProfileType` 枚举） | validate 通过 | 待提交 |
-| ☑ | T-002 `AiConfigService`：双路解析、CRUD/激活按类型隔离、test 分类型、reload 发 `AiConfigReloadedEvent`；撤 ResolvedConfig.embeddingModel/resolveEmbeddingModel | 新单测覆盖 | 待提交 |
-| ☑ | T-003 B-004：holder + 事件监听重建 + 服务动态取 store | 切 embedding 档案不重启生效 | 待提交 |
-| ☑ | T-004 Controller/DTO：`type` 进出，撤 embeddingModel | 接口实测 | 待提交 |
-| ☑ | T-005 Settings 双分区 UI | 截图验证 | 待提交 |
-| ☑ | T-006 测试修复+新增，`mvn test` 全绿 | 165/165 全绿 | 待提交 |
-| ☑ | T-007 文档：AGENTS.md 改写 embedding 节、昨日 lite-spec 变更记录、tasks.md 关 B-004 | | 待提交 |
-| ☑ | T-008 端到端验收（临时端口实测）+ 填验收记录 | FR-001~006 全过 | 待提交 |
+| ☑ | T-001 数据模型：`type` 列 + 撤 `embedding_model` 列（V1__init.sql + 运行库 ALTER + 实体 `AiProfileType` 枚举） | validate 通过 | 5bac4e2 |
+| ☑ | T-002 `AiConfigService`：双路解析、CRUD/激活按类型隔离、test 分类型、reload 发 `AiConfigReloadedEvent`；撤 ResolvedConfig.embeddingModel/resolveEmbeddingModel | 新单测覆盖 | 5bac4e2 |
+| ☑ | T-003 B-004：holder + 事件监听重建 + 服务动态取 store | 切 embedding 档案不重启生效 | 5bac4e2 |
+| ☑ | T-004 Controller/DTO：`type` 进出，撤 embeddingModel | 接口实测 | 5bac4e2 |
+| ☑ | T-005 Settings 双分区 UI | 截图验证 | 5bac4e2 |
+| ☑ | T-006 测试修复+新增，`mvn test` 全绿 | 165/165 全绿 | 5bac4e2 |
+| ☑ | T-007 文档：AGENTS.md 改写 embedding 节、昨日 lite-spec 变更记录、tasks.md 关 B-004 | | 5bac4e2 |
+| ☑ | T-008 端到端验收（临时端口实测）+ 填验收记录 | FR-001~006 全过 | 5bac4e2 |
 
 ## 4. 验收记录
 

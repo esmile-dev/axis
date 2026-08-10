@@ -34,11 +34,11 @@ created: 2026-08-06
 
 | ✓ | 任务 | 验收点 | Commit |
 |---|------|--------|--------|
-| ☑ | T-001 重写 `KnowledgeChunkerTest`：新契约全红 | 边界/重叠/清洗/标题/硬切/空值 11 用例就绪 | 待提交 |
-| ☑ | T-002 重写 `KnowledgeChunker` + 接线 `VectorKnowledgeIndexService` | 新测试全绿；`mvn test -pl axis-service` 169/169 | 待提交 |
-| ☑ | T-003 `POST /api/knowledge/reindex` + 本地 4 篇全量重建 | 返回 `{"reindexed":4}`；vector_store 33 块/3 条目（1 篇纯图片页清洗后正确地不落向量）；抽查块首=标题、零 `![`/`{#` 残留 | 待提交 |
-| ☑ | T-004 评测：结构指标 `KnowledgeChunkerGoldenTest` + `KnowledgeVectorSearchEval` 增强（图文样例+细节查询） | 坏边界率 1.2%（阈值 ≤5%，基线 96%）、近噪声块 0（基线 5）；eval 2/2 通过 | 待提交 |
-| ☑ | T-005 文档：09 架构图与参数同步、本 spec 验收记录 | 文档与代码同提交 | 待提交 |
+| ☑ | T-001 重写 `KnowledgeChunkerTest`：新契约全红 | 边界/重叠/清洗/标题/硬切/空值 11 用例就绪 | 661a5f1 |
+| ☑ | T-002 重写 `KnowledgeChunker` + 接线 `VectorKnowledgeIndexService` | 新测试全绿；`mvn test -pl axis-service` 169/169 | 661a5f1 |
+| ☑ | T-003 `POST /api/knowledge/reindex` + 本地 4 篇全量重建 | 返回 `{"reindexed":4}`；vector_store 33 块/3 条目（1 篇纯图片页清洗后正确地不落向量）；抽查块首=标题、零 `![`/`{#` 残留 | 661a5f1 |
+| ☑ | T-004 评测：结构指标 `KnowledgeChunkerGoldenTest` + `KnowledgeVectorSearchEval` 增强（图文样例+细节查询） | 坏边界率 1.2%（阈值 ≤5%，基线 96%）、近噪声块 0（基线 5）；eval 2/2 通过 | 661a5f1 |
+| ☑ | T-005 文档：09 架构图与参数同步、本 spec 验收记录 | 文档与代码同提交 | 661a5f1 |
 
 ## 4. 验收记录
 
