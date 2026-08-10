@@ -15,6 +15,7 @@ CREATE TABLE ai_config_profile (
     endpoint character varying(500) NOT NULL,
     model character varying(100) NOT NULL,
     name character varying(100) NOT NULL,
+    type character varying(20) NOT NULL DEFAULT 'CHAT',
     updated_at timestamp(6) with time zone NOT NULL,
     CONSTRAINT ai_config_profile_pkey PRIMARY KEY (id)
 );

@@ -2,6 +2,7 @@ package com.esmile.axis.controller;
 
 import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.entity.AiConfigProfile;
+import com.esmile.axis.enums.AiProfileType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -69,22 +70,24 @@ class ConfigControllerTest {
 
     @Test
     void createProfile_returnsCreatedProfile() throws Exception {
-        when(aiConfigService.createProfile("DeepSeek", "sk-new", "https://api.deepseek.com", "deepseek-v4"))
+        when(aiConfigService.createProfile("DeepSeek", "sk-new", "https://api.deepseek.com", "deepseek-v4", AiProfileType.CHAT))
                 .thenReturn(AiConfigProfile.builder()
                         .id("p2")
                         .name("DeepSeek")
                         .apiKey("enc")
                         .endpoint("https://api.deepseek.com")
                         .model("deepseek-v4")
+                        .type(AiProfileType.CHAT)
                         .active(false)
                         .build());
 
         mockMvc.perform(post("/api/v1/config/ai/profiles")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"DeepSeek\",\"apiKey\":\"sk-new\",\"endpoint\":\"https://api.deepseek.com\",\"model\":\"deepseek-v4\"}"))
+                        .content("{\"name\":\"DeepSeek\",\"apiKey\":\"sk-new\",\"endpoint\":\"https://api.deepseek.com\",\"model\":\"deepseek-v4\",\"type\":\"CHAT\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("p2"))
-                .andExpect(jsonPath("$.name").value("DeepSeek"));
+                .andExpect(jsonPath("$.name").value("DeepSeek"))
+                .andExpect(jsonPath("$.type").value("CHAT"));
     }
 
     @Test

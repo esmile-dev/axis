@@ -34,7 +34,7 @@ created: 2026-08-03
 - **B-001** 会话列表端点按前缀过滤：`knowledge-*` 会话当前会出现在 /chat 页侧栏（`JpaChatMemoryRepository` 对任意 conversationId upsert `chat_conversation`），且从主聊天页向该会话发消息会双向污染条目问答上下文，侧栏删除也会误删条目问答历史。修法：`ChatHistoryService.listConversations()` 过滤 `knowledge-%` 前缀（或给会话加来源标记），并考虑禁止主聊天页写入 `knowledge-*` 会话。注意 `ChatHistoryService.java` 当前有用户未提交改动，需等其落地后实施。条目删除后 `knowledge-{id}` 问答历史成为孤儿会话，与 B-001 同源，一并处理。（T-011 审查发现）
 - **B-002** `KnowledgeTool.createDocument` 直存仓储不发事件：Agent 聊天中创建的知识文档不进异步加工管线（产物永远 PENDING）也不进向量索引，与 design.md §6「走新创建管线（type=NOTE，触发异步加工）」有偏差（T-001 临时态遗留）。修法：改调 `KnowledgeService.create`（自动带事件）。（T-012 审查发现）
 - **B-003** pgvector 正向语义路径环境阻塞：本机 PG16 无 vector 扩展（未获授权安装系统软件）。安装后运行 `mvn test -pl axis-service -Dtest=KnowledgeVectorSearchEval` 复验 FR-010 正向路径。（T-012 环境记录）
-- **B-004** AI 档案热切换不刷新已装配 PgVectorStore 的 EmbeddingModel（启动快照语义），切换档案后 embedding 用旧 key 静默失败仅 WARN。修法：reload 钩子内重建 store 或调用时取新 model。（终审发现）
+- **B-004** ~~AI 档案热切换不刷新已装配 PgVectorStore 的 EmbeddingModel~~ **已修复**（2026-08-06，ai-config-typed-profiles：`reload()` 发 `AiConfigReloadedEvent`，`PgVectorStoreHolder` 监听重建 store，检索/索引服务动态取当前 store）。
 - **B-005** 抓取/粘贴内容经 marked v-html 渲染无消毒（XSS 面）。修法：DOMPurify 或 jsoup Safelist。（终审安全审查发现）
 - **B-006** /api/knowledge/fetch 与 from-inbox 无 SSRF 防护（可抓内网/元数据地址）。修法：解析后校验 InetAddress 拒私网段。（终审安全审查发现）
 

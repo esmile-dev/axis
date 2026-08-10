@@ -11,17 +11,26 @@ import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
-/** pgvector 索引实现：分块 + embedding 写入 vector_store；失败仅记录 WARN，不向调用方传播。 */
+/**
+ * pgvector 索引实现：分块 + embedding 写入 vector_store；失败仅记录 WARN，不向调用方传播。
+ * store 经 Supplier 每次调用动态获取（AI 配置重载后 store 重建即时生效）；为 null（降级中）时跳过。
+ */
 @Slf4j
 @RequiredArgsConstructor
 public class VectorKnowledgeIndexService implements KnowledgeIndexService {
 
-    private final VectorStore vectorStore;
+    private final Supplier<VectorStore> vectorStoreSupplier;
     private final KnowledgeItemRepository itemRepository;
 
     @Override
     public void indexItem(String itemId) {
+        VectorStore vectorStore = vectorStoreSupplier.get();
+        if (vectorStore == null) {
+            log.debug("knowledge.index.skip item={} reason=vector-disabled", itemId);
+            return;
+        }
         Optional<KnowledgeItem> found = itemRepository.findById(itemId);
         if (found.isEmpty()) {
             log.debug("knowledge.index.skip item={} reason=item-missing", itemId);
@@ -29,7 +38,7 @@ public class VectorKnowledgeIndexService implements KnowledgeIndexService {
         }
         KnowledgeItem item = found.get();
         try {
-            deleteVectors(itemId);
+            deleteVectors(vectorStore, itemId);
             List<Document> docs = KnowledgeChunker.chunk(item.getContent()).stream()
                     .map(chunk -> new Document(chunk,
                             Map.of(META_ITEM_ID, itemId, META_TITLE, item.getTitle())))
@@ -47,15 +56,19 @@ public class VectorKnowledgeIndexService implements KnowledgeIndexService {
 
     @Override
     public void removeItem(String itemId) {
+        VectorStore vectorStore = vectorStoreSupplier.get();
+        if (vectorStore == null) {
+            return;
+        }
         try {
-            deleteVectors(itemId);
+            deleteVectors(vectorStore, itemId);
             log.info("knowledge.index.removed item={}", itemId);
         } catch (Exception e) {
             log.warn("knowledge.index.remove-failed item={} reason={}", itemId, e.toString());
         }
     }
 
-    private void deleteVectors(String itemId) {
+    private void deleteVectors(VectorStore vectorStore, String itemId) {
         vectorStore.delete(new FilterExpressionBuilder().eq(META_ITEM_ID, itemId).build());
     }
 }

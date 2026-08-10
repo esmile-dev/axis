@@ -2,8 +2,10 @@ package com.esmile.axis.controller;
 
 import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.entity.AiConfigProfile;
+import com.esmile.axis.enums.AiProfileType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -52,7 +54,7 @@ public class ConfigController {
 
     @PostMapping("/profiles")
     public ResponseEntity<AiProfileResponse> createProfile(@Valid @RequestBody CreateProfileRequest req) {
-        AiConfigProfile profile = aiConfigService.createProfile(req.name(), req.apiKey(), req.endpoint(), req.model());
+        AiConfigProfile profile = aiConfigService.createProfile(req.name(), req.apiKey(), req.endpoint(), req.model(), req.type());
         return ResponseEntity.ok(toResponse(profile));
     }
 
@@ -109,7 +111,8 @@ public class ConfigController {
             @NotBlank String name,
             @NotBlank String apiKey,
             @NotBlank String endpoint,
-            @NotBlank String model
+            @NotBlank String model,
+            @NotNull AiProfileType type
     ) {
     }
 
@@ -127,6 +130,7 @@ public class ConfigController {
             String apiKey,
             String endpoint,
             String model,
+            AiProfileType type,
             boolean isActive
     ) {
     }
@@ -144,6 +148,7 @@ public class ConfigController {
                 masked,
                 profile.getEndpoint(),
                 profile.getModel(),
+                profile.getType(),
                 profile.isActive()
         );
     }

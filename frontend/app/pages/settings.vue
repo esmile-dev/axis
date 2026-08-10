@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import {
   Save, Key, Eye, EyeOff, CheckCircle, RefreshCw, Plug,
-  Plus, Pencil, Trash2, Power, Loader2
+  Plus, Pencil, Trash2, Power, Loader2, MessageSquare, ScanSearch
 } from 'lucide-vue-next'
 import {
   Dialog,
@@ -14,12 +14,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 
+type ProfileType = 'CHAT' | 'EMBEDDING'
+
 interface AiProfile {
   id: string
   name: string
   apiKey: string
   endpoint: string
   model: string
+  type: ProfileType
   isActive: boolean
 }
 
@@ -29,13 +32,35 @@ interface ProfileForm {
   apiKey: string
   endpoint: string
   model: string
+  type: ProfileType
 }
 
 const api = useApi()
 
 const profiles = ref<AiProfile[]>([])
-const activeProfile = computed(() => profiles.value.find(p => p.isActive))
-const sourceLabel = computed(() => activeProfile.value ? '数据库' : '环境变量')
+const activeChatProfile = computed(() => profiles.value.find(p => p.isActive && p.type === 'CHAT'))
+const sourceLabel = computed(() => activeChatProfile.value ? '数据库' : '环境变量')
+
+const sections: { type: ProfileType; title: string; description: string; modelPlaceholder: string; emptyHint: string }[] = [
+  {
+    type: 'CHAT',
+    title: 'Chat Models',
+    description: '对话 / Digest / Agent 用的 LLM',
+    modelPlaceholder: 'gpt-4o-mini',
+    emptyHint: '暂无 Chat 配置'
+  },
+  {
+    type: 'EMBEDDING',
+    title: 'Embedding Models',
+    description: '知识库语义检索（pgvector）用的向量模型，需支持 1536 维',
+    modelPlaceholder: 'text-embedding-3-small',
+    emptyHint: '暂无 Embedding 配置，未配置时走环境变量兜底'
+  }
+]
+
+function profilesOf(type: ProfileType) {
+  return profiles.value.filter(p => p.type === type)
+}
 
 const isModalOpen = ref(false)
 const isSubmitting = ref(false)
@@ -49,9 +74,11 @@ const form = reactive<ProfileForm>({
   name: '',
   apiKey: '',
   endpoint: 'https://api.openai.com/v1',
-  model: 'gpt-4o-mini'
+  model: '',
+  type: 'CHAT'
 })
 const isEditing = computed(() => !!form.id)
+const currentSection = computed(() => sections.find(s => s.type === form.type)!)
 
 onMounted(() => {
   loadProfiles()
@@ -65,12 +92,13 @@ async function loadProfiles() {
   }
 }
 
-function openCreate() {
+function openCreate(type: ProfileType) {
   form.id = undefined
   form.name = ''
   form.apiKey = ''
-  form.endpoint = 'https://api.openai.com/v1'
-  form.model = 'gpt-4o-mini'
+  form.endpoint = type === 'EMBEDDING' ? '' : 'https://api.openai.com/v1'
+  form.model = ''
+  form.type = type
   showApiKey.value = false
   isModalOpen.value = true
 }
@@ -81,6 +109,7 @@ function openEdit(profile: AiProfile) {
   form.apiKey = '' // blank means keep existing key
   form.endpoint = profile.endpoint
   form.model = profile.model
+  form.type = profile.type
   showApiKey.value = false
   isModalOpen.value = true
 }
@@ -105,7 +134,8 @@ async function saveProfile() {
           name: form.name,
           apiKey: form.apiKey,
           endpoint: form.endpoint,
-          model: form.model
+          model: form.model,
+          type: form.type
         }
       })
     }
@@ -185,120 +215,125 @@ function maskKey(key: string) {
       <p class="text-muted-foreground">Configure your AI Station preferences.</p>
     </header>
 
-    <div class="space-y-6">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Key class="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h2 class="font-semibold">AI Configuration</h2>
-            <p class="text-sm text-muted-foreground">
-              当前生效配置来源：
-              <span class="text-foreground font-medium">{{ sourceLabel }}</span>
-            </p>
-          </div>
-        </div>
-        <div class="flex items-center gap-2">
-          <Button variant="outline" size="sm" @click="reloadConfig">
-            <RefreshCw class="w-4 h-4 mr-1.5" />
-            Reload
-          </Button>
-          <Button size="sm" @click="openCreate">
-            <Plus class="w-4 h-4 mr-1.5" />
-            Add Config
-          </Button>
-        </div>
-      </div>
-
-      <div class="grid gap-4">
-        <div
-          v-for="profile in profiles"
-          :key="profile.id"
-          class="bg-card border border-border rounded-2xl p-5 transition-all"
-          :class="profile.isActive ? 'ring-1 ring-primary/50' : ''"
-        >
-          <div class="flex items-start justify-between gap-4">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <h3 class="font-semibold truncate">{{ profile.name }}</h3>
-                <Badge v-if="profile.isActive" variant="default" class="text-xs">Active</Badge>
-              </div>
-              <p class="text-sm text-muted-foreground truncate">
-                {{ profile.model }} · {{ profile.endpoint }}
-              </p>
-              <p class="text-xs text-muted-foreground font-mono mt-1">
-                {{ maskKey(profile.apiKey) }}
+    <div class="space-y-10">
+      <section v-for="section in sections" :key="section.type">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <MessageSquare v-if="section.type === 'CHAT'" class="w-5 h-5 text-primary" />
+              <ScanSearch v-else class="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h2 class="font-semibold">{{ section.title }}</h2>
+              <p class="text-sm text-muted-foreground">
+                {{ section.description }}
+                <template v-if="section.type === 'CHAT'">
+                  · 当前生效来源：<span class="text-foreground font-medium">{{ sourceLabel }}</span>
+                </template>
               </p>
             </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <Button
-                v-if="!profile.isActive"
-                variant="ghost"
-                size="icon"
-                class="h-8 w-8"
-                :disabled="activatingId === profile.id"
-                @click="activateProfile(profile.id)"
-              >
-                <Power class="w-4 h-4" :class="{ 'animate-pulse': activatingId === profile.id }" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                class="h-8 w-8"
-                :disabled="savingId === profile.id"
-                @click="testProfile(profile.id)"
-              >
-                <Plug class="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                class="h-8 w-8"
-                @click="openEdit(profile)"
-              >
-                <Pencil class="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                class="h-8 w-8 text-destructive hover:text-destructive"
-                :disabled="deletingId === profile.id"
-                @click="deleteProfile(profile.id)"
-              >
-                <Trash2 class="w-4 h-4" />
-              </Button>
-            </div>
           </div>
+          <div class="flex items-center gap-2">
+            <Button v-if="section.type === 'CHAT'" variant="outline" size="sm" @click="reloadConfig">
+              <RefreshCw class="w-4 h-4 mr-1.5" />
+              Reload
+            </Button>
+            <Button size="sm" @click="openCreate(section.type)">
+              <Plus class="w-4 h-4 mr-1.5" />
+              Add Config
+            </Button>
+          </div>
+        </div>
 
+        <div class="grid gap-4">
           <div
-            v-if="testResult?.id === profile.id"
-            class="mt-3 text-sm flex items-center gap-1.5"
-            :class="testResult.success ? 'text-green-500' : 'text-red-500'"
+            v-for="profile in profilesOf(section.type)"
+            :key="profile.id"
+            class="bg-card border border-border rounded-2xl p-5 transition-all"
+            :class="profile.isActive ? 'ring-1 ring-primary/50' : ''"
           >
-            <CheckCircle v-if="testResult.success" class="w-4 h-4" />
-            <Plug v-else class="w-4 h-4" />
-            {{ testResult.message }}
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <h3 class="font-semibold truncate">{{ profile.name }}</h3>
+                  <Badge v-if="profile.isActive" variant="default" class="text-xs">Active</Badge>
+                </div>
+                <p class="text-sm text-muted-foreground truncate">
+                  {{ profile.model }} · {{ profile.endpoint }}
+                </p>
+                <p class="text-xs text-muted-foreground font-mono mt-1">
+                  {{ maskKey(profile.apiKey) }}
+                </p>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <Button
+                  v-if="!profile.isActive"
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8"
+                  :disabled="activatingId === profile.id"
+                  @click="activateProfile(profile.id)"
+                >
+                  <Power class="w-4 h-4" :class="{ 'animate-pulse': activatingId === profile.id }" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8"
+                  :disabled="savingId === profile.id"
+                  @click="testProfile(profile.id)"
+                >
+                  <Plug class="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8"
+                  @click="openEdit(profile)"
+                >
+                  <Pencil class="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8 text-destructive hover:text-destructive"
+                  :disabled="deletingId === profile.id"
+                  @click="deleteProfile(profile.id)"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div
+              v-if="testResult?.id === profile.id"
+              class="mt-3 text-sm flex items-center gap-1.5"
+              :class="testResult.success ? 'text-green-500' : 'text-red-500'"
+            >
+              <CheckCircle v-if="testResult.success" class="w-4 h-4" />
+              <Plug v-else class="w-4 h-4" />
+              {{ testResult.message }}
+            </div>
+          </div>
+
+          <div v-if="profilesOf(section.type).length === 0" class="text-center py-12 text-muted-foreground border border-dashed border-border rounded-2xl">
+            {{ section.emptyHint }}，点击右上角 Add Config 添加。
           </div>
         </div>
-
-        <div v-if="profiles.length === 0" class="text-center py-12 text-muted-foreground border border-dashed border-border rounded-2xl">
-          暂无 AI 配置，点击右上角 Add Config 添加。
-        </div>
-      </div>
+      </section>
     </div>
 
     <!-- Create/Edit Modal -->
     <Dialog v-model:open="isModalOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{{ isEditing ? 'Edit Configuration' : 'Add Configuration' }}</DialogTitle>
+          <DialogTitle>{{ isEditing ? 'Edit' : 'Add' }} {{ currentSection.title.slice(0, -1) }}</DialogTitle>
         </DialogHeader>
 
         <div class="space-y-4 py-2">
           <div>
             <label class="block text-sm font-medium mb-2">Name</label>
-            <Input v-model="form.name" placeholder="DeepSeek Production" />
+            <Input v-model="form.name" :placeholder="form.type === 'EMBEDDING' ? 'Zhipu Embedding' : 'DeepSeek Production'" />
           </div>
 
           <div>
@@ -323,12 +358,12 @@ function maskKey(key: string) {
 
           <div>
             <label class="block text-sm font-medium mb-2">API Endpoint</label>
-            <Input v-model="form.endpoint" placeholder="https://api.openai.com/v1" />
+            <Input v-model="form.endpoint" :placeholder="form.type === 'EMBEDDING' ? 'https://open.bigmodel.cn/api/paas/v4' : 'https://api.openai.com/v1'" />
           </div>
 
           <div>
             <label class="block text-sm font-medium mb-2">Model</label>
-            <Input v-model="form.model" placeholder="gpt-4o-mini" />
+            <Input v-model="form.model" :placeholder="currentSection.modelPlaceholder" />
           </div>
         </div>
 

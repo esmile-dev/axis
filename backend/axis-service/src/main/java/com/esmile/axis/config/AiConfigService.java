@@ -1,6 +1,7 @@
 package com.esmile.axis.config;
 
 import com.esmile.axis.entity.AiConfigProfile;
+import com.esmile.axis.enums.AiProfileType;
 import com.esmile.axis.repository.AiConfigProfileRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.encrypt.Encryptors;
 import org.springframework.security.crypto.encrypt.TextEncryptor;
 import org.springframework.stereotype.Service;
@@ -22,14 +24,17 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Manages multiple AI provider profiles. Only one profile is active at a time;
- * the active profile builds the global {@link ChatClient} used by both Daily
- * Digest and the chat agent.
+ * Manages AI provider profiles, typed by purpose ({@link AiProfileType}): one active
+ * profile per type. The active CHAT profile builds the global {@link ChatClient}
+ * (Daily Digest + chat agent); the active EMBEDDING profile builds the
+ * {@link EmbeddingModel} for pgvector semantic search — the two may point at
+ * different providers.
  *
- * <p><b>Startup order</b>: active DB profile → env vars fallback.
+ * <p><b>Fallback order per type</b>: active DB profile → env vars.
  *
  * <p>{@link #reload()} swaps the active {@code ChatClient} atomically so other
- * threads never see a half-constructed client.
+ * threads never see a half-constructed client, and publishes
+ * {@link AiConfigReloadedEvent} so downstream stores (PgVectorStore) can rebuild.
  *
  * <p>API keys are AES-256 encrypted at rest. The encryption password/salt come
  * from {@code AXIS_ENCRYPTION_PASSWORD} and {@code AXIS_ENCRYPTION_SALT}.
@@ -39,7 +44,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AiConfigService {
 
+    /**
+     * 向量维度固定 1536（与 vector_store 表 vector(1536) 对齐）。请求显式携带：
+     * OpenAI text-embedding-3-small 默认即 1536 无副作用；智谱 embedding-3 等
+     * 可变维度模型（默认 2048）必须显式指定才能匹配表结构。
+     */
+    private static final int EMBEDDING_DIMENSIONS = 1536;
+
     private final AiConfigProfileRepository profileRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${AXIS_ENCRYPTION_PASSWORD:dev-only-do-not-use-in-prod}")
     private String encryptionPassword;
@@ -56,9 +69,9 @@ public class AiConfigService {
     @Value("${AI_MODEL:gpt-4o-mini}")
     private String envModel;
 
-    /** Knowledge 2.0 FR-010：embedding 模型名（配置项可覆盖，档案无独立字段，与 chat 模型同档案 base-url/key）。 */
+    /** env 兜底链的 embedding 模型名（仅无激活 EMBEDDING 档案时生效）。 */
     @Value("${AI_EMBEDDING_MODEL:text-embedding-3-small}")
-    private String embeddingModel;
+    private String envEmbeddingModel;
 
     private volatile ChatClient currentClient;
     private volatile ResolvedConfig currentConfig;
@@ -84,10 +97,11 @@ public class AiConfigService {
         this.currentClient = buildClient(cfg);
     }
 
-    /** Rebuild the ChatClient from the active DB profile or env config. */
+    /** Rebuild the ChatClient from the active DB profile or env config, then notify listeners. */
     public synchronized void reload() {
         log.info("Reloading AI config");
         load();
+        eventPublisher.publishEvent(new AiConfigReloadedEvent());
     }
 
     /** Get the active ChatClient. Never null after startup. */
@@ -95,15 +109,23 @@ public class AiConfigService {
         return currentClient;
     }
 
-    /** Build an EmbeddingModel from the same active config source as {@link #get()}. */
+    /** Build an EmbeddingModel from the active EMBEDDING profile, or the env fallback chain. */
     public EmbeddingModel getEmbeddingModel() {
-        ResolvedConfig cfg = currentConfig;
-        OpenAiEmbeddingOptions embeddingOpts = OpenAiEmbeddingOptions.builder()
-                .apiKey(cfg.apiKey())
-                .baseUrl(cfg.endpoint())
-                .model(embeddingModel)
-                .build();
-        return OpenAiEmbeddingModel.builder().options(embeddingOpts).build();
+        return buildEmbeddingModel(resolveEmbeddingConfig());
+    }
+
+    /** Embedding 配置解析：激活的 EMBEDDING 档案 → env（AI_API_KEY/AI_BASE_URL + AI_EMBEDDING_MODEL）。 */
+    ResolvedConfig resolveEmbeddingConfig() {
+        Optional<AiConfigProfile> active = profileRepository.findByActiveTrueAndType(AiProfileType.EMBEDDING);
+        if (active.isPresent()) {
+            try {
+                return toResolvedConfig(active.get());
+            } catch (Exception e) {
+                log.error("Failed to decrypt active embedding profile {}; falling back to env. Check AXIS_ENCRYPTION_PASSWORD/SALT: {}",
+                        active.get().getId(), e.toString());
+            }
+        }
+        return new ResolvedConfig(null, "env-fallback", envApiKey, envBaseUrl, envEmbeddingModel, "env");
     }
 
     /** Get the current effective config (apiKey in cleartext — internal use only). */
@@ -122,24 +144,26 @@ public class AiConfigService {
     }
 
     @Transactional
-    public AiConfigProfile createProfile(String name, String apiKey, String endpoint, String model) {
-        boolean first = profileRepository.count() == 0;
+    public AiConfigProfile createProfile(String name, String apiKey, String endpoint, String model, AiProfileType type) {
+        boolean firstOfType = profileRepository.countByType(type) == 0;
         AiConfigProfile profile = AiConfigProfile.builder()
                 .id(UUID.randomUUID().toString())
                 .name(name)
                 .apiKey(encrypt(apiKey))
                 .endpoint(endpoint)
                 .model(model)
-                .active(first) // first profile becomes active automatically
+                .type(type)
+                .active(firstOfType) // first profile of each type becomes active automatically
                 .build();
         AiConfigProfile saved = profileRepository.save(profile);
-        if (first) {
+        if (firstOfType) {
             reload();
         }
-        log.info("AI profile created (id={}, name={})", saved.getId(), saved.getName());
+        log.info("AI profile created (id={}, name={}, type={})", saved.getId(), saved.getName(), saved.getType());
         return saved;
     }
 
+    /** 更新档案（type 创建后不可变）。apiKey 留空表示保持原 key。 */
     @Transactional
     public AiConfigProfile updateProfile(String id, String name, String apiKey, String endpoint, String model) {
         AiConfigProfile profile = profileRepository.findById(id)
@@ -162,49 +186,58 @@ public class AiConfigService {
     public void deleteProfile(String id) {
         AiConfigProfile profile = profileRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found: " + id));
-        if (profile.isActive() && profileRepository.count() <= 1) {
-            throw new IllegalStateException("Cannot delete the only active AI profile");
+        // CHAT 兜底 env 通常不可用（demo key），保留"唯一激活不可删"保护；
+        // EMBEDDING 无档案是合法状态（env 兜底 / 降级关键词检索），允许删除
+        if (profile.isActive() && profile.getType() == AiProfileType.CHAT
+                && profileRepository.countByType(profile.getType()) <= 1) {
+            throw new IllegalStateException("Cannot delete the only active AI profile of type " + profile.getType());
         }
         profileRepository.delete(profile);
         if (profile.isActive()) {
-            // pick the oldest remaining profile as active
-            profileRepository.findAllByOrderByCreatedAtAsc().stream()
+            // pick the oldest remaining profile of the same type as active
+            profileRepository.findByTypeOrderByCreatedAtAsc(profile.getType()).stream()
                     .findFirst()
                     .ifPresent(p -> {
                         p.setActive(true);
                         profileRepository.save(p);
-                        reload();
                     });
+            // 无论是否有继任档案都要 reload：有则切继任，无则回退 env 兜底
+            reload();
         }
         log.info("AI profile deleted (id={})", id);
     }
 
+    /** 激活档案：只停用同类型的其他档案，跨类型互不影响。 */
     @Transactional
     public AiConfigProfile activateProfile(String id) {
         AiConfigProfile target = profileRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found: " + id));
-        profileRepository.findByActiveTrue().ifPresent(current -> {
+        profileRepository.findByActiveTrueAndType(target.getType()).ifPresent(current -> {
             current.setActive(false);
             profileRepository.save(current);
         });
         target.setActive(true);
         AiConfigProfile saved = profileRepository.save(target);
         reload();
-        log.info("AI profile activated (id={}, name={})", saved.getId(), saved.getName());
+        log.info("AI profile activated (id={}, name={}, type={})", saved.getId(), saved.getName(), saved.getType());
         return saved;
     }
 
-    /** Test any profile by building a temporary ChatClient. Returns null on success. */
+    /** Test any profile with a real call of its own kind. Returns null on success. */
     public String testProfile(String id) {
         AiConfigProfile profile = profileRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found: " + id));
-        return testClient(buildClient(toResolvedConfig(profile)));
+        ResolvedConfig cfg = toResolvedConfig(profile);
+        return switch (profile.getType()) {
+            case CHAT -> testClient(buildClient(cfg));
+            case EMBEDDING -> testEmbedding(buildEmbeddingModel(cfg));
+        };
     }
 
     // ---------- internals ----------
 
     private ResolvedConfig loadFromDb() {
-        Optional<AiConfigProfile> active = profileRepository.findByActiveTrue();
+        Optional<AiConfigProfile> active = profileRepository.findByActiveTrueAndType(AiProfileType.CHAT);
         if (active.isEmpty()) {
             return null;
         }
@@ -238,6 +271,16 @@ public class AiConfigService {
         return ChatClient.create(chatModel);
     }
 
+    private EmbeddingModel buildEmbeddingModel(ResolvedConfig cfg) {
+        OpenAiEmbeddingOptions embeddingOpts = OpenAiEmbeddingOptions.builder()
+                .apiKey(cfg.apiKey())
+                .baseUrl(cfg.endpoint())
+                .model(cfg.model())
+                .dimensions(EMBEDDING_DIMENSIONS)
+                .build();
+        return OpenAiEmbeddingModel.builder().options(embeddingOpts).build();
+    }
+
     private String testClient(ChatClient client) {
         try {
             String reply = client.prompt()
@@ -247,6 +290,16 @@ public class AiConfigService {
             return reply != null && reply.toLowerCase().contains("pong")
                     ? null
                     : "Unexpected reply: " + reply;
+        } catch (Exception e) {
+            return e.getClass().getSimpleName() + ": " + e.getMessage();
+        }
+    }
+
+    /** EMBEDDING 档案用真实 embed 调用验证（能暴露 provider 响应不兼容，如缺 usage 字段）。 */
+    private String testEmbedding(EmbeddingModel model) {
+        try {
+            model.embed("ping");
+            return null;
         } catch (Exception e) {
             return e.getClass().getSimpleName() + ": " + e.getMessage();
         }

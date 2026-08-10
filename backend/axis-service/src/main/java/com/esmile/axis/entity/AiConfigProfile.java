@@ -1,5 +1,6 @@
 package com.esmile.axis.entity;
 
+import com.esmile.axis.enums.AiProfileType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -35,6 +36,12 @@ public class AiConfigProfile {
 
     @Column(length = 100, nullable = false)
     private String model;
+
+    /** 档案用途类型：每类同时最多一个激活档案。 */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, nullable = false)
+    @Builder.Default
+    private AiProfileType type = AiProfileType.CHAT;
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default
