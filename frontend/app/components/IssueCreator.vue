@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Plus, Maximize2, X, Paperclip, ChevronDown, Circle, SignalLow, SignalMedium, Signal, AlertTriangle, Bug, Lightbulb, Zap } from 'lucide-vue-next'
+import { Plus, Maximize2, Paperclip, ChevronDown, Circle, SignalLow, SignalMedium, Signal, AlertTriangle, Bug, Lightbulb, Zap } from 'lucide-vue-next'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose,
 } from '@/components/ui/dialog'
 import {
   DropdownMenu,
@@ -133,13 +132,6 @@ async function handleFileUpload(event: Event) {
     <DialogContent class="sm:max-w-[700px] p-0 gap-0 bg-[#1c1c1e] border-border text-foreground overflow-hidden shadow-2xl origin-center data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] duration-200">
       <DialogHeader class="px-5 py-4 flex flex-row items-center justify-between border-b border-border/40">
         <DialogTitle class="text-sm font-medium">New issue</DialogTitle>
-        <div class="flex items-center gap-1">
-          <DialogClose as-child>
-            <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:text-foreground">
-              <X class="h-4 w-4" />
-            </Button>
-          </DialogClose>
-        </div>
       </DialogHeader>
 
       <div class="px-5 py-4 space-y-4">

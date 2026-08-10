@@ -261,14 +261,12 @@ onMounted(async () => {
           :project-id="projectId"
           @create="handleIssueCreate"
         >
-          <template #trigger>
-            <button
-              class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
-            >
-              <Plus class="w-4 h-4" />
-              New Issue
-            </button>
-          </template>
+          <button
+            class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
+          >
+            <Plus class="w-4 h-4" />
+            New Issue
+          </button>
         </IssueCreator>
       </div>
     </header>
