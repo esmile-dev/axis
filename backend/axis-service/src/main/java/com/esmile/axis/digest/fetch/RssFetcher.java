@@ -75,7 +75,8 @@ public class RssFetcher {
         String title = stripHtml(entry.getTitle());
         String link = entry.getLink();
         String summary = stripHtml(entry.getDescription() != null ? entry.getDescription().getValue() : null);
-        if (summary.length() > 240) summary = summary.substring(0, 237) + "...";
+        // Cap at 4000 per digest-2.0 design §6.1 (LLM fine-read input); display/fallback paths truncate to 240 themselves.
+        if (summary.length() > 4000) summary = summary.substring(0, 3997) + "...";
         Instant publishedAt = entry.getPublishedDate() != null
                 ? entry.getPublishedDate().toInstant()
                 : (entry.getUpdatedDate() != null ? entry.getUpdatedDate().toInstant() : Instant.now());

@@ -100,20 +100,16 @@ public class DailyDigestService {
             return DigestResult.skipped(row.getArticleCount());
         }
 
-        DigestExecutionLog logRow;
-        if (existing.isPresent()) {
-            logRow = existing.get();
-            log.info("Retrying digest for {} (previous status={})", today, logRow.getStatus());
-        } else {
-            logRow = DigestExecutionLog.builder()
-                    .digestDate(today)
-                    .status(DigestExecutionStatus.PENDING)
-                    .articleCount(0)
-                    .build();
-        }
-
         // 2. Retry cleanup + claim: drop articles left by a previous partial run,
         //    then (re)mark the day PENDING. The unique constraint is the hard guarantee.
+        DigestExecutionLog logRow = existing.orElseGet(() -> DigestExecutionLog.builder()
+                .digestDate(today)
+                .status(DigestExecutionStatus.PENDING)
+                .articleCount(0)
+                .build());
+        if (existing.isPresent()) {
+            log.info("Retrying digest for {} (previous status={})", today, logRow.getStatus());
+        }
         inboxItemRepository.deleteByTypeAndDigestDate(InboxItemType.DIGEST, today);
         logRow.setStatus(DigestExecutionStatus.PENDING);
         logRow.setArticleCount(0);
@@ -130,6 +126,14 @@ public class DailyDigestService {
         }
 
         // 3. Fetch, classify, curate, summarize, editor, persist.
+        return executePipeline(today, logRow);
+    }
+
+    /**
+     * Run the pipeline and persist the outcome: COMPLETED on success, or FAILED
+     * (retryable on the next trigger) carrying the partial counts.
+     */
+    private DigestResult executePipeline(LocalDate today, DigestExecutionLog logRow) {
         int articleCount = 0;
         int llmCallCount = 0;
         boolean aiGenerated = false;
@@ -192,6 +196,11 @@ public class DailyDigestService {
      * (in importance order), and stop at {@code totalCap}. Returns the grouped map
      * preserving section order; articles within a section are sorted by
      * {@code publishedAt DESC}.
+     *
+     * <p>TODO: within-section ranking is recency-only — a newer minor item can beat
+     * a slightly older major story, and the same event reported by several sources
+     * eats multiple slots. Revisit: cross-source dedup first (cheap, deterministic),
+     * then heuristic/LLM pre-scoring if quality still falls short.
      */
     private static Map<DigestCategory, List<Article>> curateBySectionGrouped(List<Article> classified, int totalCap) {
         Map<DigestCategory, List<Article>> byCat = classified.stream()
@@ -272,9 +281,12 @@ public class DailyDigestService {
 
     /** Hand-rolled JSON for one article — keeps the frontend-compatible shape. */
     private static String articleToJson(Article a) {
+        // Degraded view keeps the v1-style 240-char summary; the full description is for the LLM only.
+        String summary = a.summary() == null ? "" : a.summary();
+        if (summary.length() > 240) summary = summary.substring(0, 237) + "...";
         return "{"
                 + "\"title\":" + json(a.title()) + ","
-                + "\"summary\":" + json(a.summary() == null ? "" : a.summary()) + ","
+                + "\"summary\":" + json(summary) + ","
                 + "\"link\":" + json(a.link() == null ? "" : a.link()) + ","
                 + "\"sourceName\":" + json(a.sourceName() == null ? "" : a.sourceName()) + ","
                 + "\"category\":" + json(a.category().name()) + ","
