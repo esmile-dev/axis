@@ -33,13 +33,13 @@ created: 2026-08-12
 
 | ✓ | 任务 | 验收点 | Commit |
 |---|------|--------|--------|
-| ☑ | `VectorKnowledgeSearchService` 抽取纯向量泳道方法（ranked hits，不降级） | 现有单测仍绿 ✅ | 待提交 |
-| ☑ | `HybridKnowledgeSearchService`：RRF 融合 + 阈值 + 降级；装配切换 | 单测：融合/去重/阈值/降级 ✅ | 待提交 |
-| ☑ | LLM rerank（开关默认关）+ 解析失败兜底 | 单测：重排/解析失败两路径 ✅ | 待提交 |
-| ☑ | 评测集 `retrieval-golden.json`（10 合成条目 + 24 query）+ pom 映射 | 文件就位 ✅ | 待提交 |
-| ☑ | `RetrievalEval`：两模式 hit@1/3/5 对比 + 阈值断言 + 清理 | 真实环境跑出对比数字，达 FR-005 ✅ | 待提交 |
-| ☑ | 关键词泳道分词优化（评测驱动，见变更记录） | 单测 + 复跑评测数字分化 ✅ | 待提交 |
-| ☑ | 全量 `mvn test` | 187 全绿 ✅ | 待提交 |
+| ☑ | `VectorKnowledgeSearchService` 抽取纯向量泳道方法（ranked hits，不降级） | 现有单测仍绿 ✅ | 71657c4 |
+| ☑ | `HybridKnowledgeSearchService`：RRF 融合 + 阈值 + 降级；装配切换 | 单测：融合/去重/阈值/降级 ✅ | 71657c4 |
+| ☑ | LLM rerank（开关默认关）+ 解析失败兜底 | 单测：重排/解析失败两路径 ✅ | 71657c4 |
+| ☑ | 评测集 `retrieval-golden.json`（10 合成条目 + 24 query）+ pom 映射 | 文件就位 ✅ | 71657c4 |
+| ☑ | `RetrievalEval`：两模式 hit@1/3/5 对比 + 阈值断言 + 清理 | 真实环境跑出对比数字，达 FR-005 ✅ | 71657c4 |
+| ☑ | 关键词泳道分词优化（评测驱动，见变更记录） | 单测 + 复跑评测数字分化 ✅ | 71657c4 |
+| ☑ | 全量 `mvn test` | 187 全绿 ✅ | 71657c4 |
 
 ## 4. 验收记录
 
