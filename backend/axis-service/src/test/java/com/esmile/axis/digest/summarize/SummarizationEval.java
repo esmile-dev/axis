@@ -14,8 +14,12 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 
 import org.mockito.Mockito;
 
+import java.io.BufferedReader;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -75,10 +79,17 @@ class SummarizationEval {
 
     @Test
     void goldenCases() throws Exception {
-        List<Map<String, Object>> cases;
+        List<Map<String, Object>> cases = new ArrayList<>();
         try (InputStream is = getClass().getResourceAsStream("/evals/summarize-golden.jsonl")) {
             assertThat(is).isNotNull();
-            cases = MAPPER.readValue(is, new TypeReference<>() { });
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.isBlank()) {
+                        cases.add(MAPPER.readValue(line, new TypeReference<>() { }));
+                    }
+                }
+            }
         }
         assertThat(cases).hasSizeGreaterThanOrEqualTo(20);
 

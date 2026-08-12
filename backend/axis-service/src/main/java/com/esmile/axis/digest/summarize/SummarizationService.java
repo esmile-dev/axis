@@ -3,7 +3,6 @@ package com.esmile.axis.digest.summarize;
 import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.digest.classify.DigestCategory;
 import com.esmile.axis.digest.fetch.Article;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,8 +12,11 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * LLM-based summarization for Daily Digest 2.0.
@@ -28,6 +30,11 @@ import java.util.stream.Collectors;
  *       daily headline, opening, and per-section ledes + ordering. On failure returns {@code null}
  *       so the caller can fall back to the keyword-classified version.</li>
  * </ol>
+ *
+ * <p>LLM responses are bound to output records via Spring AI structured output
+ * ({@code CallResponseSpec.entity()}): the converter injects the format instructions into
+ * the prompt and cleans/parses the response (markdown fences, thinking tags), so there is
+ * no hand-rolled JSON parsing here.
  */
 @Slf4j
 @Service
@@ -35,7 +42,7 @@ import java.util.stream.Collectors;
 public class SummarizationService {
 
     private static final String PROMPT_SUMMARIZE = """
-            你是技术媒体编辑。阅读以下 RSS 文章，输出严格 JSON（无 markdown 代码块、无前后缀）：
+            你是技术媒体编辑。阅读以下 RSS 文章，为其生成中文摘要。
 
             输入：
             - title: {title}
@@ -43,46 +50,33 @@ public class SummarizationService {
             - link: {link}
             - description: {description}
 
-            输出 schema（所有字段必填，中文）：
-            {
-              "headline": "中文标题，20 字以内",
-              "tldr": "一句话说清发生了什么，不超过 50 字",
-              "detail": "2-3 句关键事实，含数据/人物/背景，80-150 字",
-              "why_it_matters": "为什么值得开发者/技术从业者关注，20-100 字",
-              "source": "{sourceName}",
-              "url": "{link}"
-            }
+            输出字段要求（全部使用中文）：
+            - headline: 中文标题，20 字以内
+            - tldr: 一句话说清发生了什么，不超过 50 字
+            - detail: 2-3 句关键事实，含数据/人物/背景，80-150 字
+            - whyItMatters: 为什么值得开发者/技术从业者关注，20-100 字
+            - source: 输入中的 source
+            - url: 输入中的 link
             """;
 
     private static final String PROMPT_EDITOR = """
             你是技术日报主编。以下是今日按版面分组的入选新闻（JSON）：
 
-            输入：
-            - sections: {
-                "ai":      [{headline, tldr, why_it_matters, source, url}, ...],
-                "tech":    [...],
-                "finance": [...],
-                "other":   [...]
-              }
+            {sections}
 
-            输出严格 JSON：
-            {
-              "headline": "今日日报总标题，15-25 字",
-              "opening": "2 句话开场白，串起今日主线，50-80 字",
-              "sections": {
-                "ai":      { "lede": "≤3 句导语", "articleOrder": ["url1","url2"] },
-                "tech":    { ... },
-                "finance": { ... },
-                "other":   { ... }
-              }
-            }
+            版面固定为 ai / tech / finance / other，每条新闻含 headline, tldr, whyItMatters, source, url。
 
-            版面条目按"读者最该先看"排序，跨源讲同一事件的合并到一条。
+            输出字段要求（全部使用中文）：
+            - headline: 今日日报总标题，15-25 字
+            - opening: 2 句话开场白，串起今日主线，50-80 字
+            - sections: 每个版面一个对象，含 lede（不超过 3 句导语）与 articleOrder（按"读者最该先看"排序的 url 列表）
+
+            跨源讲同一事件的合并到一条。
             """;
 
     private static final String PROMPT_VERSION = sha256(PROMPT_SUMMARIZE);
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
-    private static final int MAX_RETRIES = 1;
+    private static final int MAX_RETRIES = 2;
 
     private final AiConfigService aiConfigService;
     private final ArticleSummaryCacheRepository cacheRepository;
@@ -90,8 +84,8 @@ public class SummarizationService {
 
     /**
      * Summarize one article. Returns a cached result if available; otherwise calls the LLM.
-     * Any failure (timeout, bad JSON, etc.) returns a fallback summary built from the RSS
-     * description so the digest pipeline can continue.
+     * Any failure (timeout, unparseable output, etc.) returns a fallback summary built from
+     * the RSS description so the digest pipeline can continue.
      */
     public ArticleSummary summarize(Article article) {
         Optional<ArticleSummaryCache> cached = cacheRepository.findByLink(article.link());
@@ -108,15 +102,14 @@ public class SummarizationService {
 
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             try {
-                String raw = callLlm(prompt);
-                Map<String, Object> json = parseJson(raw);
+                LlmArticleSummary out = callLlm(prompt, LlmArticleSummary.class);
                 ArticleSummary summary = new ArticleSummary(
-                        str(json, "headline"),
-                        str(json, "tldr"),
-                        str(json, "detail"),
-                        str(json, "why_it_matters"),
-                        str(json, "source", article.sourceName()),
-                        str(json, "url", article.link()),
+                        nz(out.headline()),
+                        nz(out.tldr()),
+                        nz(out.detail()),
+                        nz(out.whyItMatters()),
+                        isBlank(out.source()) ? article.sourceName() : out.source(),
+                        isBlank(out.url()) ? article.link() : out.url(),
                         article.category()
                 );
                 saveCache(article, summary);
@@ -127,7 +120,7 @@ public class SummarizationService {
                     break;
                 }
                 // Retry with an extra schema reminder.
-                prompt = prompt + "\n\n注意：必须严格输出上述 JSON schema，不要 markdown 代码块。";
+                prompt = prompt + "\n\n注意：请严格按要求输出全部字段，不要遗漏或更改字段名。";
             }
         }
         return fallbackSummary(article);
@@ -141,14 +134,11 @@ public class SummarizationService {
         String inputJson = toEditorInputJson(sectioned);
         String prompt = PROMPT_EDITOR.replace("{sections}", inputJson);
         try {
-            String raw = callLlm(prompt);
-            Map<String, Object> json = parseJson(raw);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> sections = (Map<String, Object>) json.getOrDefault("sections", Map.of());
+            EditorJson out = callLlm(prompt, EditorJson.class);
             return new EditorOutput(
-                    str(json, "headline"),
-                    str(json, "opening"),
-                    parseSectionLedes(sections)
+                    nz(out.headline()),
+                    nz(out.opening()),
+                    toSectionLedes(out.sections())
             );
         } catch (Exception e) {
             log.error("digest.editor.failed reason={}", e.toString(), e);
@@ -168,23 +158,39 @@ public class SummarizationService {
     public record SectionLede(String lede, List<String> articleOrder) {
     }
 
+    /** LLM fine-read output for one article, bound via structured output. */
+    public record LlmArticleSummary(
+            String headline,
+            String tldr,
+            String detail,
+            String whyItMatters,
+            String source,
+            String url
+    ) {
+    }
+
+    /** LLM editor-pass output; sections use explicit fields to keep schema generation simple. */
+    record EditorJson(String headline, String opening, EditorSections sections) {
+    }
+
+    record EditorSections(EditorSection ai, EditorSection tech, EditorSection finance, EditorSection other) {
+    }
+
+    record EditorSection(String lede, List<String> articleOrder) {
+    }
+
     // ---------- internals ----------
 
-    private String callLlm(String prompt) {
-        return aiConfigService.get().prompt()
+    private <T> T callLlm(String prompt, Class<T> type) {
+        T result = aiConfigService.get().prompt()
                 .user(prompt)
                 .options(OpenAiChatOptions.builder().timeout(TIMEOUT))
                 .call()
-                .content();
-    }
-
-    private Map<String, Object> parseJson(String raw) throws Exception {
-        String cleaned = raw == null ? "" : raw.strip();
-        if (cleaned.startsWith("```")) {
-            cleaned = cleaned.replaceAll("^```(json)?\\s*", "").replaceAll("\\s*```$", "").strip();
+                .entity(type);
+        if (result == null) {
+            throw new IllegalStateException("LLM returned empty structured output");
         }
-        return objectMapper.readValue(cleaned, new TypeReference<>() {
-        });
+        return result;
     }
 
     private ArticleSummary fromCache(Article article, ArticleSummaryCache c) {
@@ -214,6 +220,10 @@ public class SummarizationService {
         String desc = article.summary();
         if (desc == null || desc.isBlank()) {
             desc = "（无摘要）";
+        } else if (desc.length() > 240) {
+            // Fallback display stays at the v1 truncation (FR-002); the full 4000-char
+            // description is for the LLM prompt only.
+            desc = desc.substring(0, 237) + "...";
         }
         String headline = article.title() != null && article.title().length() <= 20
                 ? article.title()
@@ -254,37 +264,32 @@ public class SummarizationService {
         return m;
     }
 
-    private Map<DigestCategory, SectionLede> parseSectionLedes(Map<String, Object> sections) {
+    private Map<DigestCategory, SectionLede> toSectionLedes(EditorSections sections) {
         Map<DigestCategory, SectionLede> result = new EnumMap<>(DigestCategory.class);
-        log.debug("Parsing section ledes, keys={}", sections.keySet());
-        for (DigestCategory cat : DigestCategory.values()) {
-            String key = categoryKey(cat);
-            Object raw = sections.get(key);
-            if (raw instanceof Map<?, ?> rawMap) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> sectionMap = (Map<String, Object>) rawMap;
-                String lede = str(sectionMap, "lede");
-                Object orderObj = sectionMap.get("articleOrder");
-                List<String> order = List.of();
-                if (orderObj instanceof List<?> list) {
-                    order = list.stream().map(Object::toString).toList();
-                }
-                result.put(cat, new SectionLede(lede, order));
-                log.debug("Parsed section {}: lede={}", key, lede);
-            } else {
-                log.debug("Section {} raw type {} not a map", key, raw == null ? "null" : raw.getClass().getSimpleName());
-            }
+        if (sections == null) {
+            return result;
         }
+        putSection(result, DigestCategory.AI_FRONTIER, sections.ai());
+        putSection(result, DigestCategory.TECH_INDUSTRY, sections.tech());
+        putSection(result, DigestCategory.FINANCE_TECH, sections.finance());
+        putSection(result, DigestCategory.OTHER, sections.other());
         return result;
     }
 
-    private String str(Map<String, Object> map, String key) {
-        return str(map, key, "");
+    private static void putSection(Map<DigestCategory, SectionLede> result, DigestCategory cat, EditorSection section) {
+        if (section == null) {
+            return;
+        }
+        result.put(cat, new SectionLede(nz(section.lede()),
+                section.articleOrder() == null ? List.of() : section.articleOrder()));
     }
 
-    private String str(Map<String, Object> map, String key, String defaultValue) {
-        Object v = map.get(key);
-        return v == null ? defaultValue : v.toString();
+    private static String nz(String s) {
+        return s == null ? "" : s;
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     private String nullToEmpty(String s) {

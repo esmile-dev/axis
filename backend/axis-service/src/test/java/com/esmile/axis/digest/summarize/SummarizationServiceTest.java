@@ -20,8 +20,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for {@link SummarizationService}: cache hit, LLM success/fallback,
- * JSON retry, and editor pass.
+ * Unit tests for {@link SummarizationService}: cache hit, structured-output success/fallback,
+ * retry on unparseable output, null-field defaults, and editor pass.
  */
 @ExtendWith(MockitoExtension.class)
 class SummarizationServiceTest {
@@ -39,7 +39,7 @@ class SummarizationServiceTest {
         service = new SummarizationService(aiConfigService, cacheRepository);
     }
 
-    private ChatClient.ChatClientRequestSpec mockLlmResponse(String response) {
+    private ChatClient.ChatClientRequestSpec mockLlmEntity(Object entity) {
         ChatClient chatClient = mock(ChatClient.class);
         ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
         ChatClient.CallResponseSpec resp = mock(ChatClient.CallResponseSpec.class);
@@ -48,7 +48,7 @@ class SummarizationServiceTest {
         when(spec.user(any(String.class))).thenReturn(spec);
         when(spec.options(any())).thenReturn(spec);
         when(spec.call()).thenReturn(resp);
-        when(resp.content()).thenReturn(response);
+        doReturn(entity).when(resp).entity(any(Class.class));
         return spec;
     }
 
@@ -67,25 +67,46 @@ class SummarizationServiceTest {
     }
 
     @Test
-    void summarize_llmSuccess_parsesJsonAndCaches() {
+    void summarize_llmSuccess_bindsEntityAndCaches() {
         Article article = article("u2", "Title", "desc");
         when(cacheRepository.findByLink("u2")).thenReturn(Optional.empty());
-        mockLlmResponse("""
-                {"headline":"中文标题","tldr":"一句话","detail":"两句事实","why_it_matters":"因为重要","source":"36氪","url":"u2"}
-                """);
+        mockLlmEntity(new SummarizationService.LlmArticleSummary(
+                "中文标题", "一句话", "两句事实", "因为重要", "36氪", "u2"));
 
         ArticleSummary s = service.summarize(article);
 
         assertThat(s.headline()).isEqualTo("中文标题");
         assertThat(s.whyItMatters()).isEqualTo("因为重要");
+        assertThat(s.category()).isEqualTo(DigestCategory.AI_FRONTIER);
         verify(cacheRepository).save(any(ArticleSummaryCache.class));
     }
 
     @Test
-    void summarize_llmReturnsBadJson_retriesOnceThenFallbacks() {
+    void summarize_llmOutputNullFields_defaultsApplied() {
+        Article article = article("u5", "Title", "desc");
+        when(cacheRepository.findByLink("u5")).thenReturn(Optional.empty());
+        mockLlmEntity(new SummarizationService.LlmArticleSummary(null, null, null, null, null, null));
+
+        ArticleSummary s = service.summarize(article);
+
+        assertThat(s.headline()).isEmpty();
+        assertThat(s.source()).isEqualTo("36氪");
+        assertThat(s.url()).isEqualTo("u5");
+    }
+
+    @Test
+    void summarize_llmOutputUnparseable_retriesOnceThenFallbacks() {
         Article article = article("u3", "Title", "bad");
         when(cacheRepository.findByLink("u3")).thenReturn(Optional.empty());
-        ChatClient.ChatClientRequestSpec spec = mockLlmResponse("not json");
+        ChatClient chatClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec resp = mock(ChatClient.CallResponseSpec.class);
+        when(aiConfigService.get()).thenReturn(chatClient);
+        when(chatClient.prompt()).thenReturn(spec);
+        when(spec.user(any(String.class))).thenReturn(spec);
+        when(spec.options(any())).thenReturn(spec);
+        when(spec.call()).thenReturn(resp);
+        when(resp.entity(any(Class.class))).thenThrow(new RuntimeException("structured output conversion failed"));
 
         ArticleSummary s = service.summarize(article);
 
@@ -115,15 +136,19 @@ class SummarizationServiceTest {
     void editor_llmSuccess_returnsEditorOutput() {
         ArticleSummary s = new ArticleSummary("H", "T", "D", "W", "36氪", "u", DigestCategory.AI_FRONTIER);
         Map<DigestCategory, List<ArticleSummary>> sectioned = Map.of(DigestCategory.AI_FRONTIER, List.of(s));
-        mockLlmResponse("""
-                {"headline":"今日 AI","opening":"开场","sections":{"ai":{"lede":"导语","articleOrder":["u"]}}}
-                """);
+        mockLlmEntity(new SummarizationService.EditorJson(
+                "今日 AI", "开场",
+                new SummarizationService.EditorSections(
+                        new SummarizationService.EditorSection("导语", List.of("u")),
+                        null, null, null)));
 
         SummarizationService.EditorOutput out = service.editor(sectioned);
 
         assertThat(out).isNotNull();
         assertThat(out.headline()).isEqualTo("今日 AI");
         assertThat(out.sectionLedes()).containsKey(DigestCategory.AI_FRONTIER);
+        assertThat(out.sectionLedes().get(DigestCategory.AI_FRONTIER).articleOrder()).containsExactly("u");
+        assertThat(out.sectionLedes()).doesNotContainKey(DigestCategory.OTHER);
     }
 
     @Test
