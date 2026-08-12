@@ -95,7 +95,7 @@ class SummarizationServiceTest {
     }
 
     @Test
-    void summarize_llmOutputUnparseable_retriesOnceThenFallbacks() {
+    void summarize_llmOutputUnparseable_retriesThenFallbacks() {
         Article article = article("u3", "Title", "bad");
         when(cacheRepository.findByLink("u3")).thenReturn(Optional.empty());
         ChatClient chatClient = mock(ChatClient.class);
@@ -112,7 +112,7 @@ class SummarizationServiceTest {
 
         assertThat(s.tldr()).isEqualTo("bad");
         assertThat(s.whyItMatters()).contains("降级");
-        verify(spec, times(2)).call(); // initial + one retry
+        verify(spec, times(3)).call(); // initial + MAX_RETRIES(2)
     }
 
     @Test

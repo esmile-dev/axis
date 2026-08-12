@@ -32,11 +32,11 @@ created: 2026-08-10
 
 | ✓ | 任务 | 验收点 | Commit |
 |---|------|--------|--------|
-| ☑ | 新增 `LlmArticleSummary` record + `summarize()` 改 `.entity()`，删 parseJson 相关代码 | 单测：合法/坏输出/异常三路径正确 ✅ | 待提交 |
-| ☑ | 新增 editor 输出 record + `editor()` 改 `.entity()` + 映射 `EditorOutput` | 单测：成功/失败两路径正确 ✅ | 待提交 |
-| ☑ | 简化 PROMPT_SUMMARIZE / PROMPT_EDITOR（去手写 schema） | prompt 无输出 schema 块，PROMPT_VERSION 随文本变化 ✅ | 待提交 |
-| ☑ | 重写 `SummarizationServiceTest`（mock `entity()`） | 7 个用例全绿 ✅ | 待提交 |
-| ☑ | 全量 `mvn test` + 跑 `SummarizationEval` | 172 全绿；eval 20 条：why_it_matters 1.00、headline 0.90 ✅ | 待提交 |
+| ☑ | 新增 `LlmArticleSummary` record + `summarize()` 改 `.entity()`，删 parseJson 相关代码 | 单测：合法/坏输出/异常三路径正确 ✅ | 28930f7 |
+| ☑ | 新增 editor 输出 record + `editor()` 改 `.entity()` + 映射 `EditorOutput` | 单测：成功/失败两路径正确 ✅ | 28930f7 |
+| ☑ | 简化 PROMPT_SUMMARIZE / PROMPT_EDITOR（去手写 schema） | prompt 无输出 schema 块，PROMPT_VERSION 随文本变化 ✅ | 28930f7 |
+| ☑ | 重写 `SummarizationServiceTest`（mock `entity()`） | 7 个用例全绿 ✅ | 28930f7 |
+| ☑ | 全量 `mvn test` + 跑 `SummarizationEval` | 172 全绿；eval 20 条：why_it_matters 1.00、headline 0.90 ✅ | 28930f7 |
 
 ## 4. 验收记录
 
@@ -55,3 +55,4 @@ created: 2026-08-10
 | 2026-08-10 | 修复 editor prompt 潜伏缺陷：旧 prompt 中不存在 `{sections}` 占位符，`replace()` 为 no-op，editor 从未收到真实文章数据；新 prompt 显式放入 `{sections}` | 实现中发现的缺陷修复（豁免清单），不修则 editor pass 一直在无输入下幻觉输出 |
 | 2026-08-10 | 修复 `SummarizationEval` 潜伏缺陷：golden 文件是 JSONL（每行一个对象），harness 却按 JSON 数组解析，有真实 key 时必崩；改为逐行解析 | 同上，缺陷修复；不修则 FR-005 无法验证 |
 | 2026-08-10 | LLM 输出契约字段命名由 snake_case（`why_it_matters`）改为 camelCase（`whyItMatters`） | Spring AI 2.0 底层是 Jackson 3（`tools.jackson`），schema 生成（victools）与反序列化分属两套注解体系；统一 camelCase 规避 `@JsonProperty` 版本错配风险。仅影响 LLM 输出契约，落库 shape 不变 |
+| 2026-08-12 | `MAX_RETRIES` 1 → 2（用户侧调整，随本特性 commit 合入）；单测重试次数断言对齐 | 提交前未重跑测试导致的红灯教训：以后 commit 前必须再跑一次全量测试 |
