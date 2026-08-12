@@ -7,7 +7,7 @@
       "Bash(psql:*)",
       "Bash(npm run:*)",
       "mcp__idea__list_directory_tree",
-      "Bash(grep -r \"warning\\\\|warn\\\\|duplicate\\\\|Warn\" /Users/alan/coding/projects/axis/.nuxt/*.log)",
+      "Bash(grep -r \"warning\\\\|warn\\\\|duplicate\\\\  |Warn\" /Users/alan/coding/projects/axis/.nuxt/*.log)",
       "Bash(npm install:*)",
       "Bash(npm info:*)",
       "Bash(npm test:*)",
