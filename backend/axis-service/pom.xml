@@ -133,6 +133,10 @@
                 <directory>${project.basedir}/../../docs/feature/knowledge-2.0/evals</directory>
                 <targetPath>evals/knowledge</targetPath>
             </testResource>
+            <testResource>
+                <directory>${project.basedir}/../../docs/feature/knowledge-hybrid-search/evals</directory>
+                <targetPath>evals/knowledge</targetPath>
+            </testResource>
         </testResources>
     </build>
 </project>

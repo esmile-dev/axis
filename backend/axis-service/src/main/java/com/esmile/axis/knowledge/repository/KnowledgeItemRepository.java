@@ -31,4 +31,12 @@ public interface KnowledgeItemRepository extends JpaRepository<KnowledgeItem, St
                                @Param("status") KnowledgeStatus status,
                                @Param("tag") String tag,
                                @Param("q") String q);
+
+    /** 关键词泳道分词检索：单 token 匹配 title 或 content（大小写不敏感），打分聚合在 Java 侧做。 */
+    @Query("""
+            SELECT k FROM KnowledgeItem k
+            WHERE LOWER(k.title) LIKE LOWER(CONCAT('%', CAST(:token AS String), '%'))
+               OR LOWER(k.content) LIKE LOWER(CONCAT('%', CAST(:token AS String), '%'))
+            """)
+    List<KnowledgeItem> searchByToken(@Param("token") String token);
 }

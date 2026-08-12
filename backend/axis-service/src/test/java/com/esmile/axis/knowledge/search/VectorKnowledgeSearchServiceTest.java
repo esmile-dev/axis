@@ -30,7 +30,7 @@ class VectorKnowledgeSearchServiceTest {
     private KnowledgeItemRepository itemRepository;
 
     private VectorKnowledgeSearchService service() {
-        return new VectorKnowledgeSearchService(() -> vectorStore, new KeywordKnowledgeSearchService(itemRepository));
+        return new VectorKnowledgeSearchService(() -> vectorStore, new KeywordKnowledgeSearchService(itemRepository), 5, 0.0);
     }
 
     @Test
@@ -62,7 +62,7 @@ class VectorKnowledgeSearchServiceTest {
     }
 
     @Test
-    void search_topKFiveRequested() {
+    void search_topKAndThresholdPassedToRequest() {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
 
         service().search("q");
@@ -70,6 +70,7 @@ class VectorKnowledgeSearchServiceTest {
         var captor = org.mockito.ArgumentCaptor.forClass(SearchRequest.class);
         verify(vectorStore).similaritySearch(captor.capture());
         assertThat(captor.getValue().getTopK()).isEqualTo(5);
+        assertThat(captor.getValue().getSimilarityThreshold()).isEqualTo(0.0);
         assertThat(captor.getValue().getQuery()).isEqualTo("q");
     }
 
@@ -105,7 +106,7 @@ class VectorKnowledgeSearchServiceTest {
         item.setId("i9");
         when(itemRepository.search(null, null, null, "q")).thenReturn(List.of(item));
         VectorKnowledgeSearchService degraded = new VectorKnowledgeSearchService(() -> null,
-                new KeywordKnowledgeSearchService(itemRepository));
+                new KeywordKnowledgeSearchService(itemRepository), 5, 0.0);
 
         List<KnowledgeSearchHit> hits = degraded.search("q");
 

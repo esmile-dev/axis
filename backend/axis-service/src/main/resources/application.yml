@@ -90,7 +90,7 @@ app:
       impl: keyword
       keywords:
         ai-frontier: AI,LLM,GPT,multimodal,embodied,chip,GPU,PyTorch,JAX,alignment,大模型,ChatGPT,Sora,具身智能,算力
-        tech-industry: cloud,database,DB,HarmonyOS,Android,iOS,kubernetes,microservice,distributed,frontend,鸿蒙,微服务
+        tech-industry: cloud,database,DB,HarmonyOS,Android,iOS,kubernetes,microservice,distributed,frontend,鸿蒙,微服务,Java
         finance-tech: NVIDIA,TSMC,BAT,earnings,财报,investment,市值,半导体,投融资
     # Timeouts (seconds)
     timeout:
@@ -98,6 +98,16 @@ app:
       total-seconds: 300
     # Parallel fetch thread pool
     thread-pool-size: 8
+
+  # Knowledge hybrid search — see docs/feature/knowledge-hybrid-search/lite-spec.md
+  knowledge:
+    search:
+      vector-top-k: 10
+      keyword-top-k: 10
+      # cosine similarity 下限（[0,1]，越大越相似）；宽松起点，由 RetrievalEval 数字校准
+      similarity-threshold: 0.2
+      rerank:
+        enabled: false
 
 management:
   endpoints:

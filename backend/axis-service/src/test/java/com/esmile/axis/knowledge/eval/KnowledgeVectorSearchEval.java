@@ -119,7 +119,7 @@ class KnowledgeVectorSearchEval {
         indexService.indexItem(ITEM_RECIPE);
 
         VectorKnowledgeSearchService searchService = new VectorKnowledgeSearchService(() -> vectorStore,
-                new KeywordKnowledgeSearchService(itemRepository));
+                new KeywordKnowledgeSearchService(itemRepository), 5, 0.0);
         // 语义相近但不含标题/正文原词（"垃圾回收" 未在标题出现，"Java" 全文未出现）
         List<KnowledgeSearchHit> hits = searchService.search("Java 垃圾回收停顿怎么排查");
 
@@ -140,7 +140,7 @@ class KnowledgeVectorSearchEval {
         indexService.indexItem(ITEM_RECIPE);
 
         VectorKnowledgeSearchService searchService = new VectorKnowledgeSearchService(() -> vectorStore,
-                new KeywordKnowledgeSearchService(itemRepository));
+                new KeywordKnowledgeSearchService(itemRepository), 5, 0.0);
         // 针对文中部细节的语义查询：不含标题原词，"m 参数/连接数" 细节只在第二节中部出现
         List<KnowledgeSearchHit> hits = searchService.search("图索引节点连接数调大对内存的影响");
 

@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "id": "evalhs-spring-ai",
+      "title": "Spring AI Tool Calling 实战",
+      "content": "通过 @Tool 注解把业务方法暴露给大模型，ChatClient 发起请求后，模型返回 tool_calls，框架执行对应方法并把结果回喂给模型继续生成。工具返回值建议携带实体 ID，方便链式操作，例如先创建再更新状态。枚举参数用字符串传递并在描述里约定合法值，可以避免模型生成非法枚举导致反序列化失败。"
+    },
+    {
+      "id": "evalhs-pgvector",
+      "title": "pgvector 向量索引进阶",
+      "content": "HNSW 索引中 m 参数决定图里每个节点的最大连接数，增大 m 提升召回率但内存开销近似线性增长，生产上通常取 16 到 64。ef_construction 影响建索引质量，ef_search 影响查询时的搜索广度。IVFFlat 建索引快但召回依赖 lists 划分质量，百万级以下语料直接用 pgvector 复用业务库即可。"
+    },
+    {
+      "id": "evalhs-redis",
+      "title": "Redis 缓存三大坑",
+      "content": "缓存穿透指查询不存在的 key，请求直接打到数据库，可用布隆过滤器或缓存空值拦截。缓存击穿是热点 key 过期瞬间大量请求并发回源，用互斥锁或逻辑过期解决。缓存雪崩是大批 key 同时失效，给过期时间加随机抖动即可缓解。监控回源率能提前发现这三类问题。"
+    },
+    {
+      "id": "evalhs-vue",
+      "title": "Vue 3 响应式原理剖析",
+      "content": "Vue 3 用 Proxy 代理对象实现响应式。ref 包装基本类型，reactive 处理对象。读取属性时触发 track 进行依赖收集，把当前 effect 记录到依赖表；修改属性时触发 trigger，派发执行所有关联的 effect，组件渲染函数就是其中一种 effect，因此数据变化会自动驱动视图更新。"
+    },
+    {
+      "id": "evalhs-k8s",
+      "title": "Kubernetes 调度与亲和性",
+      "content": "nodeSelector 是最简单的调度约束，给节点打标签后 Pod 只会调度到匹配节点。nodeAffinity 提供更丰富的表达式，支持 preferred 软约束。taints 打在节点上表示排斥，Pod 需要对应的 tolerations 才能容忍并调度上来，常配合专用节点池使用。调度器先过滤再打分两阶段完成选择。"
+    },
+    {
+      "id": "evalhs-coffee",
+      "title": "手冲咖啡指南",
+      "content": "水温建议 90 到 93 摄氏度，浅烘用高温、深烘用低温。粉水比经典取 1:15，即 15 克粉对应 225 毫升水。研磨度接近细砂糖。先注入约两倍粉量的水进行闷蒸 30 秒，让咖啡粉排气，之后分段绕圈注水，总时长控制在两分钟左右，流速过慢说明研磨偏细。"
+    },
+    {
+      "id": "evalhs-fitness",
+      "title": "增肌训练计划",
+      "content": "增肌的核心是渐进超负荷：每周逐步增加重量或次数，每组 8 到 12 次力竭区间对肌肥大最有效。训练按推、拉、腿分化，每个部位每周练两次。蛋白质摄入建议每公斤体重 1.6 到 2.2 克，分配到各餐。睡眠七小时以上，肌肉在休息时合成，不是训练时。"
+    },
+    {
+      "id": "evalhs-earnings",
+      "title": "英伟达 2025Q4 财报解读",
+      "content": "数据中心业务营收同比增长超过 90%，成为绝对支柱，Blackwell 架构 GPU 出货爬坡顺利，供不应求。游戏业务平稳。毛利率维持在 70% 以上，但市场担心大模型训练资本开支见顶。管理层指引下一代 Rubin 平台按计划推进，网络互联产品线增速显著。"
+    },
+    {
+      "id": "evalhs-g1",
+      "title": "G1 垃圾收集器调优笔记",
+      "content": "G1 把堆划分为等大的 region，优先回收垃圾最多的 region。MaxGCPauseMillis 设置停顿目标，默认 200 毫秒，G1 会据此调整年轻代大小。Mixed GC 回收老年代，触发时机由 IHOP 阈值控制。线上服务停顿毛刺常见原因是巨型对象分配和 region 退化，可配合 GC 日志分析定位。"
+    },
+    {
+      "id": "evalhs-pgindex",
+      "title": "PostgreSQL 索引选择",
+      "content": "B-tree 是默认索引，适合等值与范围查询。复合索引遵循最左前缀原则，查询条件要包含最左列才能命中。GIN 适合数组、jsonb 和全文检索这类多值包含查询。BRIN 适合物理有序的大表，体积极小。索引不是越多越好，写入放大和无谓的维护开销要算进成本。"
+    }
+  ],
+  "queries": [
+    { "q": "大模型应用里怎么让 AI 调用我自己的业务方法", "expect": "evalhs-spring-ai", "note": "语义改写：无 Tool Calling 原词" },
+    { "q": "@Tool 注解的作用", "expect": "evalhs-spring-ai", "note": "精确 token" },
+    { "q": "图索引的 m 参数调大会怎样", "expect": "evalhs-pgvector", "note": "语义 + 精确混合" },
+    { "q": "HNSW 内存占用和召回率怎么权衡", "expect": "evalhs-pgvector", "note": "精确 token" },
+    { "q": "缓存被恶意请求不存在的 key 打穿怎么办", "expect": "evalhs-redis", "note": "语义改写：穿透" },
+    { "q": "布隆过滤器解决什么问题", "expect": "evalhs-redis", "note": "精确 token" },
+    { "q": "Vue 里改了数据为什么视图会自动更新", "expect": "evalhs-vue", "note": "语义改写：响应式" },
+    { "q": "Proxy 依赖收集", "expect": "evalhs-vue", "note": "精确 token" },
+    { "q": "怎么让 Pod 只调度到指定的一批机器上", "expect": "evalhs-k8s", "note": "语义改写：nodeSelector/亲和性" },
+    { "q": "taints 和 tolerations 的关系", "expect": "evalhs-k8s", "note": "精确 token" },
+    { "q": "咖啡粉水比多少合适", "expect": "evalhs-coffee", "note": "精确 + 语义" },
+    { "q": "手冲咖啡为什么要先闷蒸", "expect": "evalhs-coffee", "note": "语义" },
+    { "q": "想让肌肉变大训练重量应该怎么递增", "expect": "evalhs-fitness", "note": "语义改写：渐进超负荷" },
+    { "q": "力量训练期间的蛋白质摄入建议", "expect": "evalhs-fitness", "note": "语义" },
+    { "q": "Blackwell 出货对毛利率的影响", "expect": "evalhs-earnings", "note": "精确 + 语义" },
+    { "q": "数据中心业务收入增长情况", "expect": "evalhs-earnings", "note": "语义" },
+    { "q": "Java 服务 GC 停顿时间长怎么调", "expect": "evalhs-g1", "note": "语义改写：G1 调优" },
+    { "q": "MaxGCPauseMillis 参数", "expect": "evalhs-g1", "note": "精确 token" },
+    { "q": "多列组合查询应该建什么样的索引", "expect": "evalhs-pgindex", "note": "语义改写：复合索引" },
+    { "q": "GIN 索引适合什么场景", "expect": "evalhs-pgindex", "note": "精确 token" },
+    { "q": "ef_construction 影响什么", "expect": "evalhs-pgvector", "note": "难例：生僻精确 token" },
+    { "q": "IHOP 阈值控制什么", "expect": "evalhs-g1", "note": "难例：缩写精确 token" },
+    { "q": "1:15 是什么的参数", "expect": "evalhs-coffee", "note": "难例：数字 token，语义信号弱" },
+    { "q": "ef_search 调大有什么代价", "expect": "evalhs-pgvector", "note": "难例：生僻精确 token" }
+  ]
+}
