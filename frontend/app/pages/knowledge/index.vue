@@ -18,6 +18,7 @@ import KnowledgeAddDialog from '@/components/KnowledgeAddDialog.vue'
 import KnowledgeArtifactView from '@/components/KnowledgeArtifactView.vue'
 import KnowledgeMindmap from '@/components/KnowledgeMindmap.vue'
 import KnowledgeQaPanel from '@/components/KnowledgeQaPanel.vue'
+import KnowledgeAskPanel from '@/components/KnowledgeAskPanel.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import type { ArtifactStatus, KnowledgeItemDetail, KnowledgeItemSummary, KnowledgeStatus, KnowledgeType } from '@/types'
 
@@ -71,6 +72,8 @@ const activeTab = ref<'content' | 'summary' | 'mindmap'>('content')
 const mindmapMounted = ref(false)
 // AI 问答面板（T-011）：右栏底部可开合；面板组件 :key=detail.id，切条目重挂载即清空重载
 const qaOpen = ref(false)
+// 问知识库面板（knowledge-ask-rag）：页面级入口，不选中条目也可用；来源卡片点击选中条目
+const askOpen = ref(false)
 // 原文滚动容器：T-010 滚动进度记录/恢复基于此 ref
 const contentScrollRef = ref<HTMLElement | null>(null)
 
@@ -379,6 +382,16 @@ onMounted(() => {
         <p class="text-sm text-muted-foreground">Your personal knowledge base.</p>
       </div>
       <div class="flex items-center gap-3">
+        <Button
+          variant="outline"
+          size="sm"
+          class="h-8 px-3 text-xs bg-secondary/20 border-border/40 hover:bg-secondary/40"
+          :class="{ 'bg-secondary/50 text-foreground': askOpen }"
+          @click="askOpen = !askOpen"
+        >
+          <Sparkles class="w-3.5 h-3.5 mr-1.5" />
+          问知识库
+        </Button>
         <Button
           size="sm"
           class="h-8 px-3 text-xs bg-[#5e6ad2] hover:bg-[#4b54a8] text-white"
@@ -732,5 +745,12 @@ onMounted(() => {
     </div>
 
     <KnowledgeAddDialog v-model:open="addDialogOpen" @added="handleAdded" />
+
+    <!-- 问知识库面板（knowledge-ask-rag）：右侧固定面板，来源卡片点击选中条目 -->
+    <KnowledgeAskPanel
+      v-if="askOpen"
+      @close="askOpen = false"
+      @select="selectItem"
+    />
   </div>
 </template>

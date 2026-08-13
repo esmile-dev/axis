@@ -1,0 +1,14 @@
+{
+  "questions": [
+    { "q": "Spring AI 里怎么把业务方法暴露给大模型调用？", "expectItem": "evalhs-spring-ai", "keywords": ["@Tool", "tool"] },
+    { "q": "HNSW 索引的 m 参数调大有什么影响？", "expectItem": "evalhs-pgvector", "keywords": ["召回", "内存"] },
+    { "q": "缓存穿透可以怎么解决？", "expectItem": "evalhs-redis", "keywords": ["布隆", "空值"] },
+    { "q": "Vue 3 的响应式是怎么实现的？", "expectItem": "evalhs-vue", "keywords": ["Proxy", "依赖收集", "effect"] },
+    { "q": "怎么让 Pod 调度到专用的节点池？", "expectItem": "evalhs-k8s", "keywords": ["taint", "toleration", "污点", "容忍", "nodeSelector", "亲和"] },
+    { "q": "手冲咖啡的粉水比和水温有什么建议？", "expectItem": "evalhs-coffee", "keywords": ["1:15", "90", "93"] },
+    { "q": "增肌训练最核心的原则是什么？", "expectItem": "evalhs-fitness", "keywords": ["渐进超负荷", "超负荷"] },
+    { "q": "英伟达最新财报里数据中心业务表现怎么样？", "expectItem": "evalhs-earnings", "keywords": ["增长", "营收"] },
+    { "q": "G1 收集器的停顿目标参数叫什么？巨型对象会带来什么问题？", "expectItem": "evalhs-g1", "keywords": ["MaxGCPauseMillis", "停顿"] },
+    { "q": "jsonb 字段的包含查询适合用哪种索引？", "expectItem": "evalhs-pgindex", "keywords": ["GIN"] }
+  ]
+}

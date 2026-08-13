@@ -26,7 +26,7 @@
 
 ### 2. 两段式 RAG 问答 + 引用来源（Citation）
 
-- [ ] 状态：未开始（依赖 #1）
+- [x] 状态：已完成（2026-08-12，`docs/feature/knowledge-ask-rag/lite-spec.md`；`POST /api/knowledge/ask` 三帧协议 + "问知识库"面板；`KnowledgeAskEval` 10/10 通过，引用全中）
 
 **为什么**：现在知识库 QA 是"单条目全文塞 prompt（10 万字符截断）"，跨条目只有 Agent 的 top-5 snippet（200 字符）——不是真 RAG。"检索 → 取全文 → 生成 + 标注引用来源"才是标准完整链路，citation 是 RAG 可信度的招牌特性。
 
