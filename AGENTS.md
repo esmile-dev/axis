@@ -54,9 +54,9 @@ backend/                         # Maven 多模块（父 POM packaging=pom，无
 │       └── digest/controller/   # /api/v1/digest REST 入口
 
 docs/
-├── workflow.md                  # 开发流程宪章：分级/门禁/豁免（**开工前必读**）
-├── PRD/  tech-architecture/  spike/  archive/
-└── feature/                     # 功能文档：_template/ + <功能名>/{requirements,design,tasks,summary}.md（M 级只有 lite-spec.md）
+├── agents/                      # Agent 配置：issue tracker（.scratch 约定）/ triage 标签 / domain docs 规则
+├── PRD/  tech-architecture/  spike/  archive/   # archive/ 内含已归档的旧开发流程宪章 workflow.md
+└── feature/                     # 历史功能文档（旧 Spec-Driven 流产物）；新规格统一落 `.scratch/<feature>/`
 ```
 
 后端配置集中在 `backend/axis-service/src/main/resources/application.yml`（端口、数据源、AI、digest cron/RSS 源均支持环境变量覆盖）。
@@ -90,7 +90,7 @@ cd backend && mvn test                                   # 全部测试
 cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 ```
 
-后端测试位于 `backend/axis-service/src/test/java/...`（如 `DailyDigestServiceTest`、`AiConfigServiceTest`、`ConfigControllerTest`）。`mvn test` 前置依赖本地 PostgreSQL 运行（`KnowledgeItemRepositorySearchTest` 直连 `axis` 库）。`digest/summarize/SummarizationEval.java` 是 AI 功能的评测入口（对应 workflow.md 第 7 条：AI 功能验收必须可评测）。
+后端测试位于 `backend/axis-service/src/test/java/...`（如 `DailyDigestServiceTest`、`AiConfigServiceTest`、`ConfigControllerTest`）。`mvn test` 前置依赖本地 PostgreSQL 运行（`KnowledgeItemRepositorySearchTest` 直连 `axis` 库）。`digest/summarize/SummarizationEval.java` 是 AI 功能的评测入口（AI 功能验收必须可评测，沿用已归档 `docs/archive/workflow.md` 第 7 条的原则）。
 
 **提交前必须测试。未验证 = 未完成。**
 
@@ -127,15 +127,15 @@ psql "postgresql://axis_readonly:axis_readonly@localhost:5432/axis"
 
 （本地 trust 认证不校验密码，这里的密码仅为文档化；建表/改表等 DDL 才用管理角色。）
 
-## 开发流程（Spec-Driven，开工前必读 `docs/workflow.md`）
+## 开发流程
 
-- 新需求先分级（S/M/L），AI 提议、用户确认：S 直接改；M 写一份 `lite-spec.md`；L 走完整文档流（requirements + design + tasks 一次产出）
-- L 级两道门禁：G1 方案确认（三份 `status` 同时置 `approved` 才开工）、G2 对照验收（`verified` 后写 summary 归档）
-- 编码严格按 tasks 任务表执行：完成一个任务打一个勾并填 commit hash；不做任务表之外的事
-- 需要偏离已批准文档时：停下，在该文档「变更记录」写明，等确认后再继续
-- 文档与代码同库同提交；新增信息并入既有文档小节，不新建文档；模板在 `docs/feature/_template/`
-- 豁免清单：缺陷修复、纯样式/文案调整、不改变行为的重构、依赖小版本升级、探索性 spike（在 `docs/spike/` 留一页结论）
-- AI/Agent 功能特别条款：验收标准必须可评测（评测集 + 通过率阈值）；Prompt 与工具定义视同接口契约（改动至少按 M 级走确认）；危险动作默认需人确认
+以 `.agents/skills/` 下的技能流为主（原 Spec-Driven 宪章已归档至 `docs/archive/workflow.md`，仅供历史参考）：
+
+- 新需求先 `grill-me` / `grill-with-docs` 对话澄清，把设计各分支问透再动手
+- 规格与任务：`to-spec` 产出 spec、`to-tickets` 拆 tracer-bullet tickets，统一落 `.scratch/<feature>/`（约定见 `docs/agents/issue-tracker.md`）
+- 实现走 `implement`：预设 seam 处 `tdd`（red-green-refactor），提交前 `code-review`；bug 排查用 `diagnosing-bugs`；跨会话大块工作用 `wayfinder`
+- 文档与代码同库同提交
+- 直接改、不走流程：缺陷修复、纯样式/文案调整、不改变行为的重构、依赖小版本升级、探索性 spike（在 `docs/spike/` 留一页结论）
 
 ## 参数校验（分层，禁止混用）
 
@@ -236,3 +236,17 @@ Source: [Andrej Karpathy Skills](https://github.com/multica-ai/andrej-karpathy-s
 - 切勿提交真实密钥：`.env` 已 gitignore，只用 `.env.example` 模板
 - AI API key 在 DB 中加密存储，密钥来自 `AXIS_ENCRYPTION_PASSWORD` / `AXIS_ENCRYPTION_SALT`，生产必须更换默认值
 - Agent 执行不可逆操作（写删文件、外发请求等）前默认需要人工确认节点，除非在 design.md 中显式豁免
+
+## Agent skills
+
+### Issue tracker
+
+Issues 以本地 markdown 形式存放在 `.scratch/<feature>/` 目录下。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用默认五角色标签：`needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单上下文布局：根目录 `CONTEXT.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
