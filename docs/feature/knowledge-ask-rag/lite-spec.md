@@ -34,11 +34,11 @@ created: 2026-08-12
 
 | ✓ | 任务 | 验收点 | Commit |
 |---|------|--------|--------|
-| ☑ | `KnowledgeAskPrompts` + `KnowledgeAskService`（检索→装配→流式） | 单测：装配/截断/零命中不调 LLM ✅ | 待提交 |
-| ☑ | `KnowledgeChatController` 加 `/ask`，sources/token/done 帧 | 编译通过，协议与既有 QA 一致 ✅ | 待提交 |
-| ☑ | 前端知识库页"问知识库"面板 | `npm run build` 通过；面板/来源卡片/并存关系按 FR-005 ✅ | 待提交 |
-| ☑ | `ask-golden.json` + `KnowledgeAskEval` + pom 映射 | 真实环境 10 条全过（pass=1.00 ≥ 0.80）✅ | 待提交 |
-| ☑ | 全量 `mvn test` | 191 全绿 ✅ | 待提交 |
+| ☑ | `KnowledgeAskPrompts` + `KnowledgeAskService`（检索→装配→流式） | 单测：装配/截断/零命中不调 LLM ✅ | b18947c |
+| ☑ | `KnowledgeChatController` 加 `/ask`，sources/token/done 帧 | 编译通过，协议与既有 QA 一致 ✅ | b18947c |
+| ☑ | 前端知识库页"问知识库"面板 | `npm run build` 通过；面板/来源卡片/并存关系按 FR-005 ✅ | b18947c |
+| ☑ | `ask-golden.json` + `KnowledgeAskEval` + pom 映射 | 真实环境 10 条全过（pass=1.00 ≥ 0.80）✅ | b18947c |
+| ☑ | 全量 `mvn test` | 191 全绿 ✅ | b18947c |
 
 ## 4. 验收记录
 
