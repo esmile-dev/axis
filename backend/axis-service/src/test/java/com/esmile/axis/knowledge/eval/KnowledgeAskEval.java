@@ -1,6 +1,7 @@
 package com.esmile.axis.knowledge.eval;
 
 import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.knowledge.KnowledgeType;
 import com.esmile.axis.knowledge.chat.KnowledgeAskService;
 import com.esmile.axis.knowledge.entity.KnowledgeItem;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
@@ -167,7 +169,8 @@ class KnowledgeAskEval {
         VectorKnowledgeSearchService vectorLane = new VectorKnowledgeSearchService(() -> vectorStore, keywordLane, 10, 0.2);
         HybridKnowledgeSearchService hybrid = new HybridKnowledgeSearchService(
                 vectorLane, keywordLane, (query, candidates) -> candidates, 10);
-        askService = new KnowledgeAskService(hybrid, itemRepository, aiConfigService);
+        askService = new KnowledgeAskService(hybrid, itemRepository,
+                new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class)));
     }
 
     @AfterAll

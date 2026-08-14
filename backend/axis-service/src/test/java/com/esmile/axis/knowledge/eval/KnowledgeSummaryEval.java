@@ -1,6 +1,7 @@
 package com.esmile.axis.knowledge.eval;
 
 import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.knowledge.ArtifactKind;
 import com.esmile.axis.knowledge.KnowledgeType;
 import com.esmile.axis.knowledge.entity.KnowledgeArtifact;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
@@ -96,6 +98,7 @@ class KnowledgeSummaryEval {
 
     private static ChatClient chatClient;
     private static AiConfigService aiConfigService;
+    private static ChatGateway chatGateway;
 
     @BeforeAll
     static void setUp() {
@@ -117,6 +120,7 @@ class KnowledgeSummaryEval {
         Mockito.when(aiConfigService.get()).thenReturn(chatClient);
         Mockito.when(aiConfigService.getConfig()).thenReturn(
                 new AiConfigService.ResolvedConfig(null, "eval", "key", baseUrl, model, "env"));
+        chatGateway = new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class));
     }
 
     record GoldenArticle(String id, String title, String content, String lang) {
@@ -209,7 +213,7 @@ class KnowledgeSummaryEval {
 
         KnowledgeArtifactGenerator generator =
                 new KnowledgeArtifactGenerator(itemRepository, artifactRepository, aiConfigService,
-                        new NoopKnowledgeIndexService());
+                        chatGateway, new NoopKnowledgeIndexService());
         generator.generateAll(article.id()); // direct call runs synchronously (no Spring proxy)
 
         Map<ArtifactKind, KnowledgeArtifact> byKind = new java.util.EnumMap<>(ArtifactKind.class);

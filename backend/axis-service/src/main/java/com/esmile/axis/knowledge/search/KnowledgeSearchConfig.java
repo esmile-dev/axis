@@ -1,6 +1,6 @@
 package com.esmile.axis.knowledge.search;
 
-import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -24,13 +24,13 @@ public class KnowledgeSearchConfig {
     public KnowledgeSearchService knowledgeSearchService(KnowledgeItemRepository itemRepository,
                                                          PgVectorStoreHolder holder,
                                                          KnowledgeSearchProperties props,
-                                                         AiConfigService aiConfigService) {
+                                                         ChatGateway chatGateway) {
         KeywordKnowledgeSearchService keywordLane = new KeywordKnowledgeSearchService(itemRepository);
         VectorKnowledgeSearchService vectorLane = new VectorKnowledgeSearchService(
                 holder::get, keywordLane, props.vectorTopK(), props.similarityThreshold());
         // rerank 默认关闭：先由 RetrievalEval 的对比数字决定是否值得默认开启
         KnowledgeReranker reranker = props.rerank().enabled()
-                ? new LlmKnowledgeReranker(aiConfigService)
+                ? new LlmKnowledgeReranker(chatGateway)
                 : (query, candidates) -> candidates;
         return new HybridKnowledgeSearchService(vectorLane, keywordLane, reranker, props.keywordTopK());
     }

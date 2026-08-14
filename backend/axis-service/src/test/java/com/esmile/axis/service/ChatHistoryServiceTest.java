@@ -1,12 +1,11 @@
 package com.esmile.axis.service;
 
-import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.entity.ChatConversation;
 import com.esmile.axis.repository.ChatConversationRepository;
 import com.esmile.axis.repository.ChatLongMemoryRepository;
 import com.esmile.axis.repository.ChatMessageRepository;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.Optional;
 
@@ -25,10 +24,10 @@ class ChatHistoryServiceTest {
     private final ChatConversationRepository conversationRepository = mock(ChatConversationRepository.class);
     private final ChatMessageRepository messageRepository = mock(ChatMessageRepository.class);
     private final ChatLongMemoryRepository longMemoryRepository = mock(ChatLongMemoryRepository.class);
-    private final AiConfigService aiConfigService = mock(AiConfigService.class);
+    private final ChatGateway chatGateway = mock(ChatGateway.class);
 
     private final ChatHistoryService service = new ChatHistoryService(
-            conversationRepository, messageRepository, longMemoryRepository, aiConfigService);
+            conversationRepository, messageRepository, longMemoryRepository, chatGateway);
 
     // ---------- sanitizeTitle ----------
 
@@ -68,14 +67,7 @@ class ChatHistoryServiceTest {
 
     @Test
     void generateAndUpgradeTitle_success_writesSanitizedTitle() {
-        ChatClient client = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
-        when(aiConfigService.get()).thenReturn(client);
-        when(client.prompt()).thenReturn(spec);
-        when(spec.user(anyString())).thenReturn(spec);
-        when(spec.call()).thenReturn(callSpec);
-        when(callSpec.content()).thenReturn("「RAG 调研笔记」\n");
+        when(chatGateway.call(anyString(), any())).thenReturn("「RAG 调研笔记」\n");
 
         ChatConversation conversation = ChatConversation.builder()
                 .id("c1").title("帮我调研一下 RAG 的方案…").build();
@@ -88,14 +80,7 @@ class ChatHistoryServiceTest {
 
     @Test
     void generateAndUpgradeTitle_blankLlmOutput_keepsFallback() {
-        ChatClient client = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
-        when(aiConfigService.get()).thenReturn(client);
-        when(client.prompt()).thenReturn(spec);
-        when(spec.user(anyString())).thenReturn(spec);
-        when(spec.call()).thenReturn(callSpec);
-        when(callSpec.content()).thenReturn("  \n ");
+        when(chatGateway.call(anyString(), any())).thenReturn("  \n ");
 
         service.generateAndUpgradeTitle("c1", "帮我调研一下 RAG 的方案");
 
@@ -104,7 +89,7 @@ class ChatHistoryServiceTest {
 
     @Test
     void generateAndUpgradeTitle_llmThrows_swallowedAndKeepsFallback() {
-        when(aiConfigService.get()).thenThrow(new RuntimeException("LLM unavailable"));
+        when(chatGateway.call(anyString(), any())).thenThrow(new RuntimeException("LLM unavailable"));
 
         assertThatCode(() -> service.generateAndUpgradeTitle("c1", "随便一句"))
                 .doesNotThrowAnyException();

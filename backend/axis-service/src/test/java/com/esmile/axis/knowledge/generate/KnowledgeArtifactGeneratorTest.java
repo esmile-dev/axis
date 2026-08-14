@@ -1,6 +1,7 @@
 package com.esmile.axis.knowledge.generate;
 
 import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.knowledge.ArtifactKind;
 import com.esmile.axis.knowledge.ArtifactStatus;
 import com.esmile.axis.knowledge.KnowledgeType;
@@ -15,7 +16,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -23,12 +23,13 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link KnowledgeArtifactGenerator}: state machine success/failure
  * paths, artifact upsert, per-artifact independence, and in-flight dedup.
- * ChatClient mocking follows {@code SummarizationServiceTest}.
+ * LLM 调用经 {@link ChatGateway} stub（链式 mock 只保留在 {@code ChatGatewayTest}）。
  */
 @ExtendWith(MockitoExtension.class)
 class KnowledgeArtifactGeneratorTest {
@@ -40,25 +41,16 @@ class KnowledgeArtifactGeneratorTest {
     @Mock
     private AiConfigService aiConfigService;
     @Mock
+    private ChatGateway chatGateway;
+    @Mock
     private KnowledgeIndexService knowledgeIndexService;
 
     private KnowledgeArtifactGenerator generator;
 
     @BeforeEach
     void setUp() {
-        generator = new KnowledgeArtifactGenerator(itemRepository, artifactRepository, aiConfigService, knowledgeIndexService);
-    }
-
-    private ChatClient.CallResponseSpec mockLlm() {
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec resp = mock(ChatClient.CallResponseSpec.class);
-        when(aiConfigService.get()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenReturn(spec);
-        when(spec.user(any(String.class))).thenReturn(spec);
-        when(spec.options(any())).thenReturn(spec);
-        when(spec.call()).thenReturn(resp);
-        return resp;
+        generator = new KnowledgeArtifactGenerator(itemRepository, artifactRepository, aiConfigService,
+                chatGateway, knowledgeIndexService);
     }
 
     private void stubModel() {
@@ -81,8 +73,7 @@ class KnowledgeArtifactGeneratorTest {
         KnowledgeItem item = item();
         when(itemRepository.findById("i1")).thenReturn(Optional.of(item));
         when(artifactRepository.findByItemIdAndKind(eq("i1"), any())).thenReturn(Optional.empty());
-        ChatClient.CallResponseSpec resp = mockLlm();
-        when(resp.content()).thenReturn(
+        when(chatGateway.call(any(String.class), any())).thenReturn(
                 "```markdown\n## TL;DR\n总结\n```",
                 "```\n# 中心主题\n## 分支\n```");
         stubModel();
@@ -109,15 +100,9 @@ class KnowledgeArtifactGeneratorTest {
         KnowledgeItem item = item();
         when(itemRepository.findById("i1")).thenReturn(Optional.of(item));
         when(artifactRepository.findByItemIdAndKind(eq("i1"), any())).thenReturn(Optional.empty());
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec resp = mock(ChatClient.CallResponseSpec.class);
-        when(aiConfigService.get()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenReturn(spec);
-        when(spec.user(any(String.class))).thenReturn(spec);
-        when(spec.options(any())).thenReturn(spec);
-        when(spec.call()).thenThrow(new RuntimeException("boom")).thenReturn(resp);
-        when(resp.content()).thenReturn("# 中心主题");
+        when(chatGateway.call(any(String.class), any()))
+                .thenThrow(new RuntimeException("boom"))
+                .thenReturn("# 中心主题");
         stubModel();
 
         generator.generateAll("i1"); // must not throw
@@ -145,8 +130,7 @@ class KnowledgeArtifactGeneratorTest {
         when(itemRepository.findById("i1")).thenReturn(Optional.of(item));
         when(artifactRepository.findByItemIdAndKind("i1", ArtifactKind.SUMMARY))
                 .thenReturn(Optional.of(existing));
-        ChatClient.CallResponseSpec resp = mockLlm();
-        when(resp.content()).thenReturn("## TL;DR\n新总结");
+        when(chatGateway.call(any(String.class), any())).thenReturn("## TL;DR\n新总结");
         stubModel();
 
         generator.generateOne("i1", ArtifactKind.SUMMARY);
@@ -163,13 +147,7 @@ class KnowledgeArtifactGeneratorTest {
         KnowledgeItem item = item();
         when(itemRepository.findById("i1")).thenReturn(Optional.of(item));
         when(artifactRepository.findByItemIdAndKind("i1", ArtifactKind.MINDMAP)).thenReturn(Optional.empty());
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        when(aiConfigService.get()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenReturn(spec);
-        when(spec.user(any(String.class))).thenReturn(spec);
-        when(spec.options(any())).thenReturn(spec);
-        when(spec.call()).thenThrow(new RuntimeException("timeout"));
+        when(chatGateway.call(any(String.class), any())).thenThrow(new RuntimeException("timeout"));
 
         generator.generateOne("i1", ArtifactKind.MINDMAP); // must not throw
 
@@ -185,7 +163,7 @@ class KnowledgeArtifactGeneratorTest {
 
         generator.generateAll("gone");
 
-        verifyNoInteractions(aiConfigService, artifactRepository);
+        verifyNoInteractions(aiConfigService, chatGateway, artifactRepository);
         verify(itemRepository, never()).save(any());
     }
 
@@ -194,11 +172,10 @@ class KnowledgeArtifactGeneratorTest {
         KnowledgeItem item = item();
         when(itemRepository.findById("i1")).thenReturn(Optional.of(item));
         when(artifactRepository.findByItemIdAndKind(eq("i1"), any())).thenReturn(Optional.empty());
-        ChatClient.CallResponseSpec resp = mockLlm();
         stubModel();
         CountDownLatch llmStarted = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        when(resp.content()).thenAnswer(inv -> {
+        when(chatGateway.call(any(String.class), any())).thenAnswer(inv -> {
             llmStarted.countDown();
             release.await();
             return "## TL;DR\n总结";
@@ -212,6 +189,6 @@ class KnowledgeArtifactGeneratorTest {
 
         release.countDown();
         worker.join(5000);
-        verify(resp, times(1)).content(); // LLM called once: the duplicate was skipped
+        verify(chatGateway, times(1)).call(any(String.class), any()); // LLM called once: the duplicate was skipped
     }
 }

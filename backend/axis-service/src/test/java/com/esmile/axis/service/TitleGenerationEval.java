@@ -1,6 +1,7 @@
 package com.esmile.axis.service;
 
 import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.repository.ChatConversationRepository;
 import com.esmile.axis.repository.ChatLongMemoryRepository;
 import com.esmile.axis.repository.ChatMessageRepository;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
@@ -62,7 +64,7 @@ class TitleGenerationEval {
                 Mockito.mock(ChatConversationRepository.class),
                 Mockito.mock(ChatMessageRepository.class),
                 Mockito.mock(ChatLongMemoryRepository.class),
-                aiConfigService);
+                new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class)));
     }
 
     @Test

@@ -1,12 +1,12 @@
 package com.esmile.axis.digest.summarize;
 
-import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
+import com.esmile.axis.config.ChatGateway.LlmOptions;
 import com.esmile.axis.digest.classify.DigestCategory;
 import com.esmile.axis.digest.fetch.Article;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -75,10 +75,9 @@ public class SummarizationService {
             """;
 
     private static final String PROMPT_VERSION = sha256(PROMPT_SUMMARIZE);
-    private static final Duration TIMEOUT = Duration.ofSeconds(30);
     private static final int MAX_RETRIES = 2;
 
-    private final AiConfigService aiConfigService;
+    private final ChatGateway chatGateway;
     private final ArticleSummaryCacheRepository cacheRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -182,15 +181,7 @@ public class SummarizationService {
     // ---------- internals ----------
 
     private <T> T callLlm(String prompt, Class<T> type) {
-        T result = aiConfigService.get().prompt()
-                .user(prompt)
-                .options(OpenAiChatOptions.builder().timeout(TIMEOUT))
-                .call()
-                .entity(type);
-        if (result == null) {
-            throw new IllegalStateException("LLM returned empty structured output");
-        }
-        return result;
+        return chatGateway.callEntity(prompt, type, new LlmOptions(Duration.ofSeconds(30), null));
     }
 
     private ArticleSummary fromCache(Article article, ArticleSummaryCache c) {

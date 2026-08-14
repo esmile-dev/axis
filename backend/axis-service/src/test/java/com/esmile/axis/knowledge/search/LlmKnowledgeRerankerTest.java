@@ -1,60 +1,46 @@
 package com.esmile.axis.knowledge.search;
 
-import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
+import com.esmile.axis.config.ChatGateway.LlmOptions;
+import com.esmile.axis.knowledge.search.LlmKnowledgeReranker.RerankJson;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.chat.client.ChatClient;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-/** {@link LlmKnowledgeReranker}：正常重排、容错解析（围栏/噪声/非法序号）、失败保持原序。 */
+/** {@link LlmKnowledgeReranker}：正常重排、null order 容错、失败保持原序、30s 超时经 LlmOptions 传递。 */
 @ExtendWith(MockitoExtension.class)
 class LlmKnowledgeRerankerTest {
 
     @Mock
-    private AiConfigService aiConfigService;
-
-    private ChatClient.CallResponseSpec mockLlm(String response) {
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec resp = mock(ChatClient.CallResponseSpec.class);
-        when(aiConfigService.get()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenReturn(spec);
-        when(spec.user(any(String.class))).thenReturn(spec);
-        when(spec.options(any())).thenReturn(spec);
-        when(spec.call()).thenReturn(resp);
-        when(resp.content()).thenReturn(response);
-        return resp;
-    }
+    private ChatGateway chatGateway;
 
     private static List<KnowledgeSearchHit> candidates(String... ids) {
         return java.util.Arrays.stream(ids).map(id -> new KnowledgeSearchHit(id, "t-" + id, "s-" + id)).toList();
     }
 
     @Test
-    void rerank_llmReordersCandidates() {
-        mockLlm("[3,1,2]");
-        LlmKnowledgeReranker reranker = new LlmKnowledgeReranker(aiConfigService);
+    void rerank_llmReordersCandidates_with30sTimeout() {
+        when(chatGateway.callEntity(any(String.class), eq(RerankJson.class), any()))
+                .thenReturn(new RerankJson(List.of(3, 1, 2)));
+        LlmKnowledgeReranker reranker = new LlmKnowledgeReranker(chatGateway);
 
         List<KnowledgeSearchHit> result = reranker.rerank("q", candidates("a", "b", "c"));
 
         assertThat(result).extracting(KnowledgeSearchHit::itemId).containsExactly("c", "a", "b");
-    }
-
-    @Test
-    void rerank_outputWithFenceAndNoise_stillParsed() {
-        mockLlm("排序结果：\n```json\n[2,1]\n```");
-        LlmKnowledgeReranker reranker = new LlmKnowledgeReranker(aiConfigService);
-
-        List<KnowledgeSearchHit> result = reranker.rerank("q", candidates("a", "b"));
-
-        assertThat(result).extracting(KnowledgeSearchHit::itemId).containsExactly("b", "a");
+        ArgumentCaptor<LlmOptions> optionsCaptor = ArgumentCaptor.forClass(LlmOptions.class);
+        verify(chatGateway).callEntity(any(String.class), eq(RerankJson.class), optionsCaptor.capture());
+        assertThat(optionsCaptor.getValue().timeout()).isEqualTo(Duration.ofSeconds(30));
+        assertThat(optionsCaptor.getValue().memoryConversationId()).isNull();
     }
 
     @Test
@@ -67,31 +53,30 @@ class LlmKnowledgeRerankerTest {
     }
 
     @Test
-    void rerank_unparseableOutput_keepsOriginalOrder() {
-        mockLlm("这不是 JSON");
+    void rerank_nullOrder_keepsOriginalOrder() {
+        when(chatGateway.callEntity(any(String.class), eq(RerankJson.class), any())).thenReturn(new RerankJson(null));
         List<KnowledgeSearchHit> input = candidates("a", "b", "c");
-        LlmKnowledgeReranker reranker = new LlmKnowledgeReranker(aiConfigService);
+        LlmKnowledgeReranker reranker = new LlmKnowledgeReranker(chatGateway);
 
         assertThat(reranker.rerank("q", input)).isEqualTo(input);
     }
 
     @Test
     void rerank_llmThrows_keepsOriginalOrder() {
-        ChatClient chatClient = mock(ChatClient.class);
-        when(aiConfigService.get()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenThrow(new RuntimeException("boom"));
+        when(chatGateway.callEntity(any(String.class), eq(RerankJson.class), any()))
+                .thenThrow(new RuntimeException("boom"));
         List<KnowledgeSearchHit> input = candidates("a", "b");
-        LlmKnowledgeReranker reranker = new LlmKnowledgeReranker(aiConfigService);
+        LlmKnowledgeReranker reranker = new LlmKnowledgeReranker(chatGateway);
 
         assertThat(reranker.rerank("q", input)).isEqualTo(input);
     }
 
     @Test
     void rerank_singleCandidate_skipsLlmCall() {
-        LlmKnowledgeReranker reranker = new LlmKnowledgeReranker(aiConfigService);
+        LlmKnowledgeReranker reranker = new LlmKnowledgeReranker(chatGateway);
         List<KnowledgeSearchHit> input = candidates("a");
 
         assertThat(reranker.rerank("q", input)).isEqualTo(input);
-        verify(aiConfigService, never()).get();
+        verifyNoInteractions(chatGateway);
     }
 }

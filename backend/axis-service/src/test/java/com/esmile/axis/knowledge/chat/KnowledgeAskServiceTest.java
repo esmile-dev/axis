@@ -1,6 +1,6 @@
 package com.esmile.axis.knowledge.chat;
 
-import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.knowledge.KnowledgeType;
 import com.esmile.axis.knowledge.entity.KnowledgeItem;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
@@ -11,7 +11,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.chat.client.ChatClient;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -29,10 +28,10 @@ class KnowledgeAskServiceTest {
     @Mock
     private KnowledgeItemRepository itemRepository;
     @Mock
-    private AiConfigService aiConfigService;
+    private ChatGateway chatGateway;
 
     private KnowledgeAskService service() {
-        return new KnowledgeAskService(knowledgeSearchService, itemRepository, aiConfigService);
+        return new KnowledgeAskService(knowledgeSearchService, itemRepository, chatGateway);
     }
 
     private static KnowledgeItem item(String id, String title, String content) {
@@ -42,19 +41,11 @@ class KnowledgeAskServiceTest {
         return item;
     }
 
-    /** Mock LLM 链并返回 system prompt 捕获器（ask() 构建 spec 时即被捕获）。 */
+    /** Stub 网关流式调用并返回 system prompt 捕获器（ask() 调网关时即被捕获）。 */
     private ArgumentCaptor<String> mockLlm(String... tokens) {
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.StreamResponseSpec streamSpec = mock(ChatClient.StreamResponseSpec.class);
         ArgumentCaptor<String> systemCaptor = ArgumentCaptor.forClass(String.class);
-        when(aiConfigService.get()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenReturn(spec);
-        when(spec.system(systemCaptor.capture())).thenReturn(spec);
-        when(spec.user(any(String.class))).thenReturn(spec);
-        when(spec.options(any())).thenReturn(spec);
-        when(spec.stream()).thenReturn(streamSpec);
-        when(streamSpec.content()).thenReturn(Flux.fromArray(tokens));
+        when(chatGateway.stream(systemCaptor.capture(), any(String.class), any()))
+                .thenReturn(Flux.fromArray(tokens));
         return systemCaptor;
     }
 
@@ -100,7 +91,7 @@ class KnowledgeAskServiceTest {
         assertThat(result.sources()).isEmpty();
         assertThat(result.answer().collectList().block())
                 .containsExactly(KnowledgeAskService.NO_HIT_MESSAGE);
-        verify(aiConfigService, never()).get();
+        verifyNoInteractions(chatGateway);
     }
 
     @Test
@@ -111,6 +102,6 @@ class KnowledgeAskServiceTest {
         KnowledgeAskService.AskResult result = service().ask("q");
 
         assertThat(result.sources()).isEmpty();
-        verify(aiConfigService, never()).get();
+        verifyNoInteractions(chatGateway);
     }
 }

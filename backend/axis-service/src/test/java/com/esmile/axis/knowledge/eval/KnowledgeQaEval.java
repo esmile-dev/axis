@@ -1,6 +1,7 @@
 package com.esmile.axis.knowledge.eval;
 
 import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.knowledge.ArtifactKind;
 import com.esmile.axis.knowledge.KnowledgeType;
 import com.esmile.axis.knowledge.chat.KnowledgeQaService;
@@ -179,7 +180,7 @@ class KnowledgeQaEval {
                 .thenReturn(Optional.empty()); // golden 无预置总结，走原文-only prompt 分支
 
         KnowledgeQaService service =
-                new KnowledgeQaService(itemRepository, artifactRepository, aiConfigService, chatMemory);
+                new KnowledgeQaService(itemRepository, artifactRepository, new ChatGateway(aiConfigService, chatMemory));
         List<String> tokens = service.chat(article.id(), question).collectList().block(QA_BLOCK_TIMEOUT);
         return tokens == null ? "" : String.join("", tokens).strip();
     }

@@ -1,6 +1,6 @@
 package com.esmile.axis.digest.summarize;
 
-import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.digest.classify.DigestCategory;
 import com.esmile.axis.digest.fetch.Article;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.chat.client.ChatClient;
 
 import java.time.Instant;
 import java.util.List;
@@ -22,12 +21,13 @@ import static org.mockito.Mockito.*;
 /**
  * Unit tests for {@link SummarizationService}: cache hit, structured-output success/fallback,
  * retry on unparseable output, null-field defaults, and editor pass.
+ * LLM 调用经 {@link ChatGateway} stub（链式 mock 只保留在 {@code ChatGatewayTest}）。
  */
 @ExtendWith(MockitoExtension.class)
 class SummarizationServiceTest {
 
     @Mock
-    private AiConfigService aiConfigService;
+    private ChatGateway chatGateway;
 
     @Mock
     private ArticleSummaryCacheRepository cacheRepository;
@@ -36,20 +36,11 @@ class SummarizationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SummarizationService(aiConfigService, cacheRepository);
+        service = new SummarizationService(chatGateway, cacheRepository);
     }
 
-    private ChatClient.ChatClientRequestSpec mockLlmEntity(Object entity) {
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec resp = mock(ChatClient.CallResponseSpec.class);
-        when(aiConfigService.get()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenReturn(spec);
-        when(spec.user(any(String.class))).thenReturn(spec);
-        when(spec.options(any())).thenReturn(spec);
-        when(spec.call()).thenReturn(resp);
-        doReturn(entity).when(resp).entity(any(Class.class));
-        return spec;
+    private void mockLlmEntity(Object entity) {
+        doReturn(entity).when(chatGateway).callEntity(any(String.class), any(Class.class), any());
     }
 
     @Test
@@ -63,7 +54,7 @@ class SummarizationServiceTest {
 
         assertThat(s.headline()).isEqualTo("H");
         assertThat(s.tldr()).isEqualTo("T");
-        verify(aiConfigService, never()).get();
+        verifyNoInteractions(chatGateway);
     }
 
     @Test
@@ -98,34 +89,22 @@ class SummarizationServiceTest {
     void summarize_llmOutputUnparseable_retriesThenFallbacks() {
         Article article = article("u3", "Title", "bad");
         when(cacheRepository.findByLink("u3")).thenReturn(Optional.empty());
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec resp = mock(ChatClient.CallResponseSpec.class);
-        when(aiConfigService.get()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenReturn(spec);
-        when(spec.user(any(String.class))).thenReturn(spec);
-        when(spec.options(any())).thenReturn(spec);
-        when(spec.call()).thenReturn(resp);
-        when(resp.entity(any(Class.class))).thenThrow(new RuntimeException("structured output conversion failed"));
+        when(chatGateway.callEntity(any(String.class), any(Class.class), any()))
+                .thenThrow(new RuntimeException("structured output conversion failed"));
 
         ArticleSummary s = service.summarize(article);
 
         assertThat(s.tldr()).isEqualTo("bad");
         assertThat(s.whyItMatters()).contains("降级");
-        verify(spec, times(3)).call(); // initial + MAX_RETRIES(2)
+        verify(chatGateway, times(3)).callEntity(any(String.class), any(Class.class), any()); // initial + MAX_RETRIES(2)
     }
 
     @Test
     void summarize_llmThrows_returnsFallback() {
         Article article = article("u4", "Title", "desc");
         when(cacheRepository.findByLink("u4")).thenReturn(Optional.empty());
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        when(aiConfigService.get()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenReturn(spec);
-        when(spec.user(any(String.class))).thenReturn(spec);
-        when(spec.options(any())).thenReturn(spec);
-        when(spec.call()).thenThrow(new RuntimeException("timeout"));
+        when(chatGateway.callEntity(any(String.class), any(Class.class), any()))
+                .thenThrow(new RuntimeException("timeout"));
 
         ArticleSummary s = service.summarize(article);
 
@@ -155,13 +134,8 @@ class SummarizationServiceTest {
     void editor_llmFailure_returnsNull() {
         ArticleSummary s = new ArticleSummary("H", "T", "D", "W", "36氪", "u", DigestCategory.AI_FRONTIER);
         Map<DigestCategory, List<ArticleSummary>> sectioned = Map.of(DigestCategory.AI_FRONTIER, List.of(s));
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
-        when(aiConfigService.get()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenReturn(spec);
-        when(spec.user(any(String.class))).thenReturn(spec);
-        when(spec.options(any())).thenReturn(spec);
-        when(spec.call()).thenThrow(new RuntimeException("boom"));
+        when(chatGateway.callEntity(any(String.class), any(Class.class), any()))
+                .thenThrow(new RuntimeException("boom"));
 
         assertThat(service.editor(sectioned)).isNull();
     }

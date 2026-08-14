@@ -1,6 +1,8 @@
 package com.esmile.axis.knowledge.generate;
 
 import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
+import com.esmile.axis.config.ChatGateway.LlmOptions;
 import com.esmile.axis.knowledge.ArtifactKind;
 import com.esmile.axis.knowledge.ArtifactStatus;
 import com.esmile.axis.knowledge.entity.KnowledgeArtifact;
@@ -10,11 +12,9 @@ import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import com.esmile.axis.knowledge.search.KnowledgeIndexService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,12 +32,10 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class KnowledgeArtifactGenerator {
 
-    /** NFR-001: single LLM call timeout (digest uses 30s; this feature specifies 60s). */
-    private static final Duration TIMEOUT = Duration.ofSeconds(60);
-
     private final KnowledgeItemRepository itemRepository;
     private final KnowledgeArtifactRepository artifactRepository;
     private final AiConfigService aiConfigService;
+    private final ChatGateway chatGateway;
     private final KnowledgeIndexService knowledgeIndexService;
 
     /** In-flight dedup: a repeat trigger for the same item+kind is accepted but skipped. */
@@ -96,11 +94,7 @@ public class KnowledgeArtifactGenerator {
     }
 
     private String callLlm(String prompt) {
-        return aiConfigService.get().prompt()
-                .user(prompt)
-                .options(OpenAiChatOptions.builder().timeout(TIMEOUT))
-                .call()
-                .content();
+        return chatGateway.call(prompt, LlmOptions.DEFAULT);
     }
 
     /** Reload before writing so a concurrent update to the other artifact status is not clobbered. */

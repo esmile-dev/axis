@@ -1,6 +1,7 @@
 package com.esmile.axis.digest.summarize;
 
 import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.digest.classify.DigestCategory;
 import com.esmile.axis.digest.fetch.Article;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
@@ -74,7 +76,8 @@ class SummarizationEval {
         when(cacheRepo.save(any(ArticleSummaryCache.class))).thenAnswer(i -> i.getArgument(0));
         when(cacheRepo.findByLink(any())).thenReturn(Optional.empty());
 
-        service = new SummarizationService(aiConfigService, cacheRepo);
+        service = new SummarizationService(
+                new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class)), cacheRepo);
     }
 
     @Test

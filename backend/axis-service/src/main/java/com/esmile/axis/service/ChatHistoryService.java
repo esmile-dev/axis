@@ -1,6 +1,7 @@
 package com.esmile.axis.service;
 
-import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.config.ChatGateway;
+import com.esmile.axis.config.ChatGateway.LlmOptions;
 import com.esmile.axis.entity.ChatConversation;
 import com.esmile.axis.entity.ChatLongMemory;
 import com.esmile.axis.entity.ChatMessage;
@@ -28,7 +29,7 @@ public class ChatHistoryService {
     private final ChatConversationRepository conversationRepository;
     private final ChatMessageRepository messageRepository;
     private final ChatLongMemoryRepository longMemoryRepository;
-    private final AiConfigService aiConfigService;
+    private final ChatGateway chatGateway;
 
     public List<ChatConversation> listConversations() {
         return conversationRepository.findAllByOrderByUpdatedAtDesc();
@@ -83,16 +84,14 @@ public class ChatHistoryService {
 
     /** LLM 生成标题：prompt 约束 + 代码侧清洗双保险 */
     String generateTitle(String firstMessage) {
-        String raw = aiConfigService.get().prompt()
-                .user(String.format("""
+        String raw = chatGateway.call(String.format("""
                         请为以下用户消息生成一个简短的会话标题。
                         要求：使用中文，4~10 个字，越精炼越好；只输出标题本身，
                         不要引号、不要书名号、不要换行、不要标点结尾。
 
                         用户消息：%s
-                        """, firstMessage))
-                .call()
-                .content();
+                        """, firstMessage),
+                LlmOptions.DEFAULT);
         return sanitizeTitle(raw);
     }
 
