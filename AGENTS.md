@@ -107,7 +107,7 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 
 ## 数据模型
 
-核心实体关系：`Project` 1:N `Issue` 1:N `Comment`；`KnowledgeItem` 1:N `KnowledgeArtifact`；`InboxItem` 独立。Issue 状态枚举：`TODO` / `IN_PROGRESS` / `IN_REVIEW` / `DONE` / `CANCELLED`。KnowledgeItem type 六枚举：`ARTICLE` / `BOOK` / `PODCAST` / `VIDEO` / `TUTORIAL` / `NOTE`；status 四枚举：`UNREAD` / `READING` / `DONE` / `ARCHIVED`。
+核心实体关系：`Project` 1:N `Issue` 1:N `Comment`；`KnowledgeItem` 1:N `KnowledgeArtifact`；`InboxItem` 独立。Issue 状态枚举：`BACKLOG` / `TODO` / `IN_PROGRESS` / `DONE` / `CANCELLED`。KnowledgeItem type 六枚举：`ARTICLE` / `BOOK` / `PODCAST` / `VIDEO` / `TUTORIAL` / `NOTE`；status 四枚举：`UNREAD` / `READING` / `DONE` / `ARCHIVED`。
 
 ## 环境变量
 
