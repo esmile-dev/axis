@@ -37,7 +37,7 @@ interface ChatMessageRow {
 
 /**
  * 聊天状态管理 — 对接后端：
- * - POST /api/agent/chat（SSE：token/tool/confirm/done 帧），fetch + ReadableStream（$fetch 不支持流式）
+ * - POST /api/agent/chat（SSE：token/tool/confirm/error/done 帧），fetch + ReadableStream（$fetch 不支持流式）
  * - POST /api/agent/confirm/:id 危险操作人工确认回调（confirm 帧挂起期间放行/拒绝）
  * - GET/DELETE /api/agent/conversations[/:id/messages] 会话历史（短期记忆，服务端持久化）
  * - GET/DELETE /api/agent/memories 长期记忆
@@ -107,13 +107,28 @@ export function useChat() {
   async function send(text: string) {
     const content = text.trim()
     if (!content || sending.value) return
+    messages.value.push({ id: crypto.randomUUID(), role: 'user', content, toolCalls: [] })
+    await doSend(content)
+  }
+
+  /** 手动重试：移除失败的 assistant 占位，复用最近一条 user 消息重发；
+   *  retry 标志让后端先去掉失败时已落库的同一 user 消息，避免历史双份 */
+  async function retryLastFailed() {
+    const last = messages.value[messages.value.length - 1]
+    if (!last || last.role !== 'assistant' || !last.error || sending.value) return
+    const lastUser = messages.value[messages.value.length - 2]
+    if (!lastUser || lastUser.role !== 'user') return
+    messages.value.pop()
+    await doSend(lastUser.content, true)
+  }
+
+  async function doSend(content: string, retry = false) {
     if (!activeId.value) {
       activeId.value = crypto.randomUUID()
     }
     // 新会话：后端会在首轮结束后异步用 LLM 生成语义标题，需要延迟再刷一次列表
     const isNewConversation = !conversations.value.some(c => c.id === activeId.value)
 
-    messages.value.push({ id: crypto.randomUUID(), role: 'user', content, toolCalls: [] })
     // 用 reactive 包装，后续流式增量修改才能触发视图更新
     const assistant = reactive<ChatMessage>({
       id: crypto.randomUUID(),
@@ -131,7 +146,7 @@ export function useChat() {
       const response = await fetch(`${apiBase}/api/agent/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content, sessionId: activeId.value }),
+        body: JSON.stringify({ message: content, sessionId: activeId.value, retry }),
         signal: abortController.signal
       })
       if (!response.ok || !response.body) {
@@ -164,6 +179,10 @@ export function useChat() {
                 action: event.action,
                 detail: event.detail
               }
+            } else if (event.type === 'error') {
+              // 后端 LLM 流失败帧：标记错误样式，失败原因直接展示（后随 done 帧正常收尾）
+              assistant.error = true
+              assistant.content += (assistant.content ? '\n\n' : '') + `⚠️ ${event.message}`
             }
           } catch {
             // 忽略无法解析的帧
@@ -181,6 +200,9 @@ export function useChat() {
         assistant.error = true
         if (!assistant.content) {
           assistant.content = '请求失败，请确认后端服务已启动、AI 配置可用后重试。'
+        } else {
+          // 已有部分内容时的断流（如网络中断）：保留已生成内容并明示不完整
+          assistant.content += '\n\n⚠️ 连接中断，以上内容可能不完整'
         }
       }
     } finally {
@@ -246,7 +268,7 @@ export function useChat() {
 
   return {
     conversations, activeId, messages, memories, sending, loadingHistory, pendingConfirm,
-    init, selectConversation, newConversation, deleteConversation, send, stop,
+    init, selectConversation, newConversation, deleteConversation, send, retryLastFailed, stop,
     respondConfirm, loadMemories, deleteMemory
   }
 }

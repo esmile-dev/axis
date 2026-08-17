@@ -170,12 +170,15 @@ async function onDrop(status: string) {
   dragOverColumn.value = null
 }
 
+// AI 扩写失败：记录失败 issue id，卡片上内联提示（下次尝试自动清除）
+const expandError = ref<string | null>(null)
 const isExpanding = ref(false)
 const expandingIssueId = ref<string | null>(null)
 
 async function aiExpand(issue: Issue) {
   isExpanding.value = true
   expandingIssueId.value = issue.id
+  expandError.value = null
 
   try {
     const { public: { apiBase } } = useRuntimeConfig()
@@ -187,12 +190,15 @@ async function aiExpand(issue: Issue) {
     const reader = response.body?.getReader()
     if (!reader) return
 
+    // 单个 decoder 复用 + stream:true：多字节 UTF-8 字符跨 chunk 时不乱码
+    const decoder = new TextDecoder()
     let raw = ''
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      raw += new TextDecoder().decode(value)
+      raw += decoder.decode(value, { stream: true })
     }
+    raw += decoder.decode()
 
     // /api/agent/expand 返回 SSE（data:<chunk>\n\n），剥离帧还原纯文本
     const result = raw
@@ -200,6 +206,11 @@ async function aiExpand(issue: Issue) {
       .filter(l => l.startsWith('data:'))
       .map(l => l.slice(5))
       .join('')
+
+    // 流中途失败会产出空文本——不能用空串覆盖 description
+    if (!result.trim()) {
+      throw new Error('AI 扩写返回为空')
+    }
 
     await optimistic.optimisticUpdate(
       async (id, updates) => {
@@ -213,6 +224,7 @@ async function aiExpand(issue: Issue) {
     )
   } catch (e) {
     console.error('AI Expansion failed', e)
+    expandError.value = issue.id
   } finally {
     isExpanding.value = false
     expandingIssueId.value = null
@@ -337,6 +349,7 @@ onMounted(async () => {
                   <Sparkles class="w-3 h-3" :class="{ 'animate-pulse': isExpanding }" />
                   AI EXPAND
                 </button>
+                <span v-if="expandError === issue.id" class="text-[10px] text-destructive">扩写失败，请重试</span>
               </div>
             </NuxtLink>
             

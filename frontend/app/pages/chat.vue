@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Send, Loader2, Plus, Wrench, Sparkles, Trash2, Brain, MessageSquare, AlertTriangle, Square } from 'lucide-vue-next'
+import { Send, Loader2, Plus, Wrench, Sparkles, Trash2, Brain, MessageSquare, AlertTriangle, Square, RotateCcw } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
@@ -12,8 +12,12 @@ import {
 
 const {
   conversations, activeId, messages, memories, sending, loadingHistory, pendingConfirm,
-  init, selectConversation, newConversation, deleteConversation, send, stop, respondConfirm, deleteMemory
+  init, selectConversation, newConversation, deleteConversation, send, retryLastFailed, stop,
+  respondConfirm, deleteMemory
 } = useChat()
+
+// 仅最后一条失败消息展示重试入口
+const lastMessageId = computed(() => messages.value[messages.value.length - 1]?.id)
 
 const input = ref('')
 const listRef = ref<HTMLElement | null>(null)
@@ -208,6 +212,18 @@ function formatTime(iso: string) {
                     <span v-if="!m.content" class="text-xs">{{ pendingConfirm ? '等待确认…' : '思考中…' }}</span>
                   </div>
                 </div>
+
+                <!-- 失败消息的手动重试（仅最后一条出错且不在流式中时展示） -->
+                <Button
+                  v-if="m.error && !m.streaming && m.id === lastMessageId"
+                  variant="outline"
+                  size="sm"
+                  class="h-7 px-2.5 text-xs text-muted-foreground"
+                  @click="retryLastFailed"
+                >
+                  <RotateCcw class="w-3 h-3 mr-1" />
+                  重试
+                </Button>
               </div>
             </div>
           </div>

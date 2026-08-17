@@ -8,6 +8,7 @@ import com.esmile.axis.ai.tool.ProjectTool;
 import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.service.ChatHistoryService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
  * Agent 对话编排 — system prompt 拼装（含长期记忆注入）、
  * advisor/tools 装配、流式事件产生。传输层（SSE 帧）由 Controller 负责。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AgentService {
@@ -36,11 +38,19 @@ public class AgentService {
     private final ConfirmationService confirmationService;
     private final ChatHistoryService chatHistoryService;
 
+    public Flux<ChatEvent> chat(String message, String sessionId) {
+        return chat(message, sessionId, false);
+    }
+
     /**
      * 流式对话：合并 token 流（Spring AI）与工具事件流（ToolCallNotifier），
      * 产出 {@link ChatEvent} 序列，尾部带 {@link ChatEvent.Done}。
+     * retry=true（手动重试）时先去掉失败时已落库的同一 user 消息，避免历史双份。
      */
-    public Flux<ChatEvent> chat(String message, String sessionId) {
+    public Flux<ChatEvent> chat(String message, String sessionId, boolean retry) {
+        if (retry) {
+            chatHistoryService.removeLastUserMessageIfMatches(sessionId, message);
+        }
         boolean newConversation = !chatHistoryService.conversationExists(sessionId);
         Sinks.Many<ChatEvent> toolEvents = toolCallNotifier.begin();
 
@@ -62,6 +72,12 @@ public class AgentService {
                     if (newConversation) {
                         chatHistoryService.generateAndUpgradeTitle(sessionId, message);
                     }
+                })
+                // LLM 流失败不裸断：映射成 error 帧 + done 帧，前端可展示可收尾
+                .onErrorResume(e -> {
+                    log.warn("agent.chat.failed session={} reason={}", sessionId, e.toString());
+                    String detail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    return Flux.just(new ChatEvent.Error("生成失败：" + detail), new ChatEvent.Done());
                 });
 
         return Flux.merge(tokenFlux, toolEvents.asFlux());

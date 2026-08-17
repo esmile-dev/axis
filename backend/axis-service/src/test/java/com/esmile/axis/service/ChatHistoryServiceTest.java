@@ -2,6 +2,7 @@ package com.esmile.axis.service;
 
 import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.entity.ChatConversation;
+import com.esmile.axis.entity.ChatMessage;
 import com.esmile.axis.repository.ChatConversationRepository;
 import com.esmile.axis.repository.ChatLongMemoryRepository;
 import com.esmile.axis.repository.ChatMessageRepository;
@@ -94,5 +95,31 @@ class ChatHistoryServiceTest {
         assertThatCode(() -> service.generateAndUpgradeTitle("c1", "随便一句"))
                 .doesNotThrowAnyException();
         verify(conversationRepository, never()).save(any());
+    }
+
+    // ---------- removeLastUserMessageIfMatches ----------
+
+    @Test
+    void removeLastUserMessageIfMatches_contentMatches_deletes() {
+        ChatMessage last = ChatMessage.builder()
+                .id("m9").conversationId("c1").role("USER").content("同一句话").seq(3).build();
+        when(messageRepository.findTopByConversationIdAndRoleOrderBySeqDesc("c1", "USER"))
+                .thenReturn(Optional.of(last));
+
+        service.removeLastUserMessageIfMatches("c1", "同一句话");
+
+        verify(messageRepository).delete(last);
+    }
+
+    @Test
+    void removeLastUserMessageIfMatches_contentDiffers_keeps() {
+        ChatMessage last = ChatMessage.builder()
+                .id("m9").conversationId("c1").role("USER").content("别的话").seq(3).build();
+        when(messageRepository.findTopByConversationIdAndRoleOrderBySeqDesc("c1", "USER"))
+                .thenReturn(Optional.of(last));
+
+        service.removeLastUserMessageIfMatches("c1", "同一句话");
+
+        verify(messageRepository, never()).delete(any(ChatMessage.class));
     }
 }

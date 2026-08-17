@@ -67,6 +67,17 @@ public class ChatHistoryService {
     }
 
     /**
+     * 手动重试去重：流式失败时 MessageChatMemoryAdvisor 已在 before 阶段把 user 消息落库，
+     * 直接重发会产生双份——仅当末条 user 消息与重发内容一致时先删（不一致说明当时未落库，直接发）。
+     */
+    @Transactional
+    public void removeLastUserMessageIfMatches(String conversationId, String content) {
+        messageRepository.findTopByConversationIdAndRoleOrderBySeqDesc(conversationId, "USER")
+                .filter(m -> m.getContent().equals(content))
+                .ifPresent(messageRepository::delete);
+    }
+
+    /**
      * 新会话首轮结束后，异步用 LLM 生成语义标题，覆盖 deriveTitle 的截断兜底。
      * 失败静默——截断标题已在库中，体验不会比升级前差。
      */
