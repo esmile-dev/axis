@@ -43,11 +43,11 @@ created: 2026-08-14
 
 | ✓ | 任务 | 验收点 | Commit |
 |---|------|--------|--------|
-| ☑ | `ChatEvent.Confirm` + `ToolCallNotifier` 泛化 + `ConfirmationService` + 单测 | 批准/拒绝/超时/无流/未知 id/rejectAllPending 6 用例全绿 ✅ | 待回填 |
-| ☑ | 3 个 delete tool 接确认门 + `InboxService.findById` + tool 单测 | 批准才删、拒绝不删、detail 含标题（6 用例全绿）✅ | 待回填 |
-| ☑ | `POST /api/agent/confirm/{id}` 端点 + Controller 帧映射 + `AgentService` doFinally 兜底 | E2E：404 语义正确；`mvn test` 全绿 ✅ | 待回填 |
-| ☑ | 前端 `useChat` confirm 帧 + 内嵌确认卡片 | E2E 验证：确认/取消两路径 + `npm run build` 通过 ✅ | 待回填 |
-| ☑ | roadmap 勾选 + AGENTS.md 同步 + 回填 commit hash | 文档与代码一致（hash 提交后回填）✅ | 待回填 |
+| ☑ | `ChatEvent.Confirm` + `ToolCallNotifier` 泛化 + `ConfirmationService` + 单测 | 批准/拒绝/超时/无流/未知 id/rejectAllPending 6 用例全绿 ✅ | 3fbf0b5 |
+| ☑ | 3 个 delete tool 接确认门 + `InboxService.findById` + tool 单测 | 批准才删、拒绝不删、detail 含标题（6 用例全绿）✅ | 3fbf0b5 |
+| ☑ | `POST /api/agent/confirm/{id}` 端点 + Controller 帧映射 + `AgentService` doFinally 兜底 | E2E：404 语义正确；`mvn test` 全绿 ✅ | 3fbf0b5 |
+| ☑ | 前端 `useChat` confirm 帧 + 内嵌确认卡片 | E2E 验证：确认/取消两路径 + `npm run build` 通过 ✅ | 3fbf0b5 |
+| ☑ | roadmap 勾选 + AGENTS.md 同步 + 回填 commit hash | 文档与代码一致（hash 提交后回填）✅ | 3fbf0b5 |
 
 ## 4. 验收记录
 
