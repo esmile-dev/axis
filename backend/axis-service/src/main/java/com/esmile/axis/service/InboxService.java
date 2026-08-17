@@ -54,6 +54,12 @@ public class InboxService {
         return repository.save(item);
     }
 
+    @Transactional(readOnly = true)
+    public InboxItem findById(String id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("InboxItem not found: " + id));
+    }
+
     @Transactional
     public InboxItem update(String id, String content, String status, boolean read) {
         InboxItem item = repository.findById(id)

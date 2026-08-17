@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Send, Loader2, Plus, Wrench, Sparkles, Trash2, Brain, MessageSquare } from 'lucide-vue-next'
+import { Send, Loader2, Plus, Wrench, Sparkles, Trash2, Brain, MessageSquare, AlertTriangle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
@@ -11,8 +11,8 @@ import {
 } from '@/components/ui/dialog'
 
 const {
-  conversations, activeId, messages, memories, sending, loadingHistory,
-  init, selectConversation, newConversation, deleteConversation, send, deleteMemory
+  conversations, activeId, messages, memories, sending, loadingHistory, pendingConfirm,
+  init, selectConversation, newConversation, deleteConversation, send, respondConfirm, deleteMemory
 } = useChat()
 
 const input = ref('')
@@ -174,6 +174,25 @@ function formatTime(iso: string) {
                     <span>调用工具：{{ t }}</span>
                   </div>
                 </div>
+
+                <!-- 危险操作人工确认卡片（confirm 帧挂起期间展示） -->
+                <div
+                  v-if="m.streaming && pendingConfirm"
+                  class="rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 space-y-3"
+                >
+                  <div class="flex items-start gap-2 text-sm">
+                    <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
+                    <div class="min-w-0">
+                      <p class="font-medium">待确认：{{ pendingConfirm.action }}</p>
+                      <p class="text-xs text-muted-foreground mt-0.5 break-words whitespace-pre-wrap">{{ pendingConfirm.detail }}</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 pl-6">
+                    <Button size="sm" variant="destructive" @click="respondConfirm(true)">确认执行</Button>
+                    <Button size="sm" variant="outline" @click="respondConfirm(false)">取消</Button>
+                  </div>
+                </div>
+
                 <div
                   class="bg-secondary/30 rounded-2xl px-4 py-3 text-sm"
                   :class="{ 'border border-destructive/40': m.error }"
@@ -185,7 +204,7 @@ function formatTime(iso: string) {
                     :class="{ 'mt-2': m.content }"
                   >
                     <Loader2 class="w-3.5 h-3.5 animate-spin" />
-                    <span v-if="!m.content" class="text-xs">思考中…</span>
+                    <span v-if="!m.content" class="text-xs">{{ pendingConfirm ? '等待确认…' : '思考中…' }}</span>
                   </div>
                 </div>
               </div>

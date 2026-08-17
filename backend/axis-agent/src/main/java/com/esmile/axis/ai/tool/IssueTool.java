@@ -1,5 +1,6 @@
 package com.esmile.axis.ai.tool;
 
+import com.esmile.axis.ai.ConfirmationService;
 import com.esmile.axis.ai.ToolCallNotifier;
 import com.esmile.axis.entity.Issue;
 import com.esmile.axis.service.IssueService;
@@ -20,6 +21,7 @@ public class IssueTool {
 
     private final IssueService issueService;
     private final ToolCallNotifier toolCallNotifier;
+    private final ConfirmationService confirmationService;
 
     @Tool(description = "创建一个新的 Issue（任务/需求）")
     public String createIssue(
@@ -66,12 +68,16 @@ public class IssueTool {
         return "✅ Issue 优先级已更新为 " + priority;
     }
 
-    @Tool(description = "删除一个 Issue")
+    @Tool(description = "删除一个 Issue（危险操作，需用户确认后才会执行）")
     public String deleteIssue(
             @ToolParam(description = "Issue 的 ID") String id) {
         toolCallNotifier.emit("删除 Issue");
+        Issue issue = issueService.findById(id);
+        if (!confirmationService.awaitApproval("删除 Issue", "标题：" + issue.getTitle())) {
+            return "⚠️ 用户未确认（拒绝或确认超时），已取消删除 Issue：" + issue.getTitle();
+        }
         issueService.delete(id);
-        return "🗑️ Issue 已删除";
+        return "🗑️ 已删除 Issue：" + issue.getTitle();
     }
 }
 

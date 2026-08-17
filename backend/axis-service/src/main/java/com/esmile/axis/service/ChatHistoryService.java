@@ -53,6 +53,11 @@ public class ChatHistoryService {
         return longMemoryRepository.save(ChatLongMemory.builder().content(content).build());
     }
 
+    public ChatLongMemory findMemoryById(String id) {
+        return longMemoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("ChatLongMemory not found: " + id));
+    }
+
     public void deleteMemory(String id) {
         longMemoryRepository.deleteById(id);
     }

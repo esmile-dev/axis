@@ -50,7 +50,7 @@
 
 ### 4. 危险操作的 Human-in-the-loop 确认
 
-- [ ] 状态：未开始
+- [x] 状态：已完成（2026-08-16，`docs/feature/agent-dangerous-confirm/lite-spec.md`；3 个删除 tool 接确认门，SSE confirm 帧挂起 + `POST /api/agent/confirm/{id}` 放行，5 分钟超时/无流/断连均按拒绝兜底；E2E 验证批准才删、拒绝不删、未知 id 404）
 
 **为什么**：AGENTS.md 自己写了"Agent 执行不可逆操作前默认需要人工确认节点"——但代码没实现。面试官问"Agent 乱删数据怎么办"（Agent 安全性几乎必问），现在只能答"没做"。实现了就是"规划-确认-执行"的 Agent 安全模式。
 

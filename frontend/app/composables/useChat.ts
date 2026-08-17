@@ -22,6 +22,13 @@ export interface ChatLongMemory {
   createdAt: string
 }
 
+/** 危险操作人工确认请求（后端 SSE confirm 帧） */
+export interface PendingConfirm {
+  confirmId: string
+  action: string
+  detail: string
+}
+
 interface ChatMessageRow {
   id: string
   role: string
@@ -30,7 +37,8 @@ interface ChatMessageRow {
 
 /**
  * 聊天状态管理 — 对接后端：
- * - POST /api/agent/chat（SSE：token/tool/done 帧），fetch + ReadableStream（$fetch 不支持流式）
+ * - POST /api/agent/chat（SSE：token/tool/confirm/done 帧），fetch + ReadableStream（$fetch 不支持流式）
+ * - POST /api/agent/confirm/:id 危险操作人工确认回调（confirm 帧挂起期间放行/拒绝）
  * - GET/DELETE /api/agent/conversations[/:id/messages] 会话历史（短期记忆，服务端持久化）
  * - GET/DELETE /api/agent/memories 长期记忆
  */
@@ -42,6 +50,7 @@ export function useChat() {
   const sending = useState<boolean>('chat-sending', () => false)
   const loadingHistory = useState<boolean>('chat-loading-history', () => false)
   const initialized = useState<boolean>('chat-initialized', () => false)
+  const pendingConfirm = useState<PendingConfirm | null>('chat-pending-confirm', () => null)
 
   const api = useApi()
 
@@ -144,6 +153,12 @@ export function useChat() {
               assistant.content += event.text
             } else if (event.type === 'tool') {
               assistant.toolCalls.push(event.label)
+            } else if (event.type === 'confirm') {
+              pendingConfirm.value = {
+                confirmId: event.confirmId,
+                action: event.action,
+                detail: event.detail
+              }
             }
           } catch {
             // 忽略无法解析的帧
@@ -159,12 +174,25 @@ export function useChat() {
     } finally {
       assistant.streaming = false
       sending.value = false
+      pendingConfirm.value = null
       // 刷新会话列表（新会话落库 / 标题与排序更新）
       await loadConversations()
       if (isNewConversation) {
         // 等后端异步 LLM 标题落库后再刷一次（截断兜底 → 语义标题）
         setTimeout(() => loadConversations(), 3000)
       }
+    }
+  }
+
+  /** 危险操作确认回调：放行/拒绝后端挂起中的删除类 tool，卡片乐观消失 */
+  async function respondConfirm(approved: boolean) {
+    const pending = pendingConfirm.value
+    if (!pending) return
+    pendingConfirm.value = null
+    try {
+      await api(`/api/agent/confirm/${pending.confirmId}`, { method: 'POST', body: { approved } })
+    } catch (e) {
+      console.error('Failed to submit confirmation', e)
     }
   }
 
@@ -199,8 +227,8 @@ export function useChat() {
   }
 
   return {
-    conversations, activeId, messages, memories, sending, loadingHistory,
+    conversations, activeId, messages, memories, sending, loadingHistory, pendingConfirm,
     init, selectConversation, newConversation, deleteConversation, send,
-    loadMemories, deleteMemory
+    respondConfirm, loadMemories, deleteMemory
   }
 }

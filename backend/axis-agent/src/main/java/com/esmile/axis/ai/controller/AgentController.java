@@ -2,9 +2,12 @@ package com.esmile.axis.ai.controller;
 
 import com.esmile.axis.ai.AgentService;
 import com.esmile.axis.ai.ChatEvent;
+import com.esmile.axis.ai.ConfirmationService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
@@ -16,7 +19,9 @@ import java.util.Map;
  * 只做传输层职责：接收请求、委托 AgentService、把 ChatEvent 映射成 SSE 帧。
  *
  * <p>SSE 每帧为 JSON：{@code {"type":"token","text":"..."}} 文本增量、
- * {@code {"type":"tool","label":"..."}} 工具调用事件、{@code {"type":"done"}} 结束。
+ * {@code {"type":"tool","label":"..."}} 工具调用事件、
+ * {@code {"type":"confirm","confirmId":...,"action":...,"detail":...}} 危险操作确认请求、
+ * {@code {"type":"done"}} 结束。
  */
 @RestController
 @RequestMapping("/api/agent")
@@ -24,6 +29,7 @@ import java.util.Map;
 public class AgentController {
 
     private final AgentService agentService;
+    private final ConfirmationService confirmationService;
 
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<Map<String, String>>> chat(@Valid @RequestBody ChatRequest request) {
@@ -41,6 +47,18 @@ public class AgentController {
     }
 
     /**
+     * 危险操作人工确认回调 — 前端确认卡片点击后调用，
+     * 放行（或拒绝）挂起中的删除类 tool；确认 id 未知/已过期返回 404
+     */
+    @PostMapping("/confirm/{confirmId}")
+    public ResponseEntity<Map<String, String>> confirm(@PathVariable String confirmId,
+                                                       @Valid @RequestBody ConfirmRequest request) {
+        return confirmationService.resolve(confirmId, request.approved())
+                ? ResponseEntity.ok(Map.of("status", "ok"))
+                : ResponseEntity.notFound().build();
+    }
+
+    /**
      * PRD 扩写 Agent — 替代原来的 /api/ai/expand
      * 流式输出，根据标题生成 PRD
      */
@@ -53,6 +71,8 @@ public class AgentController {
         Map<String, String> payload = switch (event) {
             case ChatEvent.Token(String text) -> Map.of("type", "token", "text", text);
             case ChatEvent.Tool(String label) -> Map.of("type", "tool", "label", label);
+            case ChatEvent.Confirm(String confirmId, String action, String detail) ->
+                    Map.of("type", "confirm", "confirmId", confirmId, "action", action, "detail", detail);
             case ChatEvent.Done() -> Map.of("type", "done");
         };
         return ServerSentEvent.<Map<String, String>>builder(payload).build();
@@ -68,5 +88,11 @@ public class AgentController {
         public String titleOrDefault() {
             return title == null || title.isBlank() ? DEFAULT_TITLE : title;
         }
+    }
+
+    /**
+     * /api/agent/confirm/{confirmId} 的请求体
+     */
+    public record ConfirmRequest(@NotNull Boolean approved) {
     }
 }

@@ -24,10 +24,19 @@ public class ToolCallNotifier {
     }
 
     public void emit(String label) {
+        emit(new ChatEvent.Tool(label));
+    }
+
+    public void emit(ChatEvent event) {
         Sinks.Many<ChatEvent> sink = current.get();
         if (sink != null) {
-            sink.tryEmitNext(new ChatEvent.Tool(label));
+            sink.tryEmitNext(event);
         }
+    }
+
+    /** 是否有活跃对话流（无流时危险操作确认门直接拒绝，无从确认） */
+    public boolean isActive() {
+        return current.get() != null;
     }
 
     public void end() {

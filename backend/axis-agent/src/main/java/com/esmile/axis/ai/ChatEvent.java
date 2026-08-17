@@ -12,6 +12,9 @@ public sealed interface ChatEvent {
     /** 工具调用事件（label 为中文动作描述，给前端展示） */
     record Tool(String label) implements ChatEvent {}
 
+    /** 危险操作人工确认请求（前端弹确认卡片，回调 /api/agent/confirm/{confirmId}） */
+    record Confirm(String confirmId, String action, String detail) implements ChatEvent {}
+
     /** 对话结束 */
     record Done() implements ChatEvent {}
 }

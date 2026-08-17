@@ -1,5 +1,6 @@
 package com.esmile.axis.ai.tool;
 
+import com.esmile.axis.ai.ConfirmationService;
 import com.esmile.axis.ai.ToolCallNotifier;
 import com.esmile.axis.entity.ChatLongMemory;
 import com.esmile.axis.service.ChatHistoryService;
@@ -20,6 +21,7 @@ public class MemoryTool {
 
     private final ChatHistoryService chatHistoryService;
     private final ToolCallNotifier toolCallNotifier;
+    private final ConfirmationService confirmationService;
 
     @Tool(description = "保存一条长期记忆（用户的偏好、习惯、重要事实等需要跨会话记住的信息）")
     public String saveMemory(
@@ -41,10 +43,14 @@ public class MemoryTool {
                 .collect(Collectors.joining("\n"));
     }
 
-    @Tool(description = "删除一条长期记忆")
+    @Tool(description = "删除一条长期记忆（危险操作，需用户确认后才会执行）")
     public String deleteMemory(
             @ToolParam(description = "记忆的 ID") String id) {
         toolCallNotifier.emit("删除长期记忆");
+        String content = chatHistoryService.findMemoryById(id).getContent();
+        if (!confirmationService.awaitApproval("删除长期记忆", "内容：" + content)) {
+            return "⚠️ 用户未确认（拒绝或确认超时），已取消删除该记忆。";
+        }
         chatHistoryService.deleteMemory(id);
         return "🗑️ 已删除该记忆";
     }

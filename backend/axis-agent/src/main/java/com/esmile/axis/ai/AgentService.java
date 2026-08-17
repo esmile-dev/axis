@@ -33,6 +33,7 @@ public class AgentService {
     private final KnowledgeTool knowledgeTool;
     private final MemoryTool memoryTool;
     private final ToolCallNotifier toolCallNotifier;
+    private final ConfirmationService confirmationService;
     private final ChatHistoryService chatHistoryService;
 
     /**
@@ -55,6 +56,8 @@ public class AgentService {
                 .concatWith(Flux.just(new ChatEvent.Done()))
                 .doFinally(signalType -> {
                     toolCallNotifier.end();
+                    // 断连/正常结束时取消挂起中的人工确认（按拒绝放行，不遗留悬挂线程）
+                    confirmationService.rejectAllPending();
                     // 新会话：首轮结束后异步用 LLM 生成语义标题（覆盖截断兜底，失败静默）
                     if (newConversation) {
                         chatHistoryService.generateAndUpgradeTitle(sessionId, message);
