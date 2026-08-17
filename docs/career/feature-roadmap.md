@@ -86,7 +86,7 @@
 
 ### 7. SSE 流式健壮性：错误帧 + 手动重试 + aiExpand decoder（取消已完成）
 
-- [ ] 状态：部分完成（2026-08-17，`184c0fc`：前端 AbortController + 停止按钮已落地；剩余 error 帧、手动重试、`aiExpand` decoder 修复）
+- [x] 状态：已完成（2026-08-17）。① error 帧：`ChatEvent.Error` + `AgentService.onErrorResume`——LLM 流失败不再裸断，error 帧携带原因、done 帧照常收尾；② 手动重试：失败消息旁"重试"按钮复用末条 user 消息重发（`send` 拆出 `doSend` 复用路径），`retry` 标志触发后端按内容匹配删除已落库的重复 user 消息——**先验证结论**：读 Spring AI 2.0 源码证实 `MessageChatMemoryAdvisor.before()` 在流式开始前就落 user 消息（assistant 由 `ChatClientMessageAggregator` 在流完成后聚合落库），不去重必双份；③ `aiExpand`：decoder 单实例复用 + `{stream:true}` 修跨 chunk 乱码，空结果守卫（不再用空串覆盖 description），失败在卡片内联提示。`AgentServiceTest` +3、`ChatHistoryServiceTest` +2，全量 `mvn test` 绿。范围外维持：自动重试；`/api/knowledge/ask` 同模式扩展（可选项未做）
 
 **为什么**：流式链路是本项目差异化卖点（existing-features #3），但错误处理仍是黑盒——LLM 中途挂掉时 HTTP 200 早已提交、SSE 连接直接断开，前端只能靠 catch 猜一句通用文案（`useChat.ts:179-185`）；`aiExpand` 每个 chunk 新建 `TextDecoder`（`projects/[id].vue:194`），多字节中文字符跨 chunk 必乱码，且失败时只 `console.error` 无用户可见反馈。**修 bug 的叙事比堆 feature 更打动资深面试官**——"我发现并修复了流式链路的 X 个问题"。
 

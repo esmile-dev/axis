@@ -35,7 +35,7 @@
 
 ## 3. 双流合并的流式 SSE 架构（差异化亮点）
 
-**简历写法**：设计结构化 SSE 帧协议（token/tool/confirm/done 四类帧），基于 Reactor `Flux.merge` 实现 LLM token 流与工具调用事件流的实时交织推送，前端即时展示"正在创建 Issue…"等 Agent 行为。
+**简历写法**：设计结构化 SSE 帧协议（token/tool/confirm/error/done 五类帧），基于 Reactor `Flux.merge` 实现 LLM token 流与工具调用事件流的实时交织推送，前端即时展示"正在创建 Issue…"等 Agent 行为。
 
 **背后技术**：
 - 核心难点：**Spring AI 的 tool 调用发生在框架内部调用栈，Tool 方法拿不到响应流**。解法：全局 `AtomicReference<Sinks.Many>` 隐式上下文传递，`begin()` 挂 sink，tool 方法内 `emit()`，两路流 `Flux.merge` 按到达顺序交织（`AgentService.java` + `ToolCallNotifier.java`）。
@@ -43,7 +43,7 @@
 - 前端：`fetch + ReadableStream`（`$fetch` 不支持流式）、`TextDecoder({stream:true})` 处理多字节 UTF-8 跨 chunk 截断、增量行缓冲处理不完整帧——三个细节都是真实踩坑点。
 - `reactive()` 包装流中消息，字符串追加直接驱动 Vue 视图。
 
-**面试官深挖**：WebFlux 背压机制；SSE vs WebSocket 选型（LLM 场景单向、文本、HTTP 友好，SSE 够用）；取消与断连处理（停止生成已落地——AbortController + 停止按钮；错误帧与重试仍是缺口 → roadmap P1 #7）。
+**面试官深挖**：WebFlux 背压机制；SSE vs WebSocket 选型（LLM 场景单向、文本、HTTP 友好，SSE 够用）；取消与断连处理（AbortController 停止生成；LLM 失败经 `onErrorResume` 映射 error 帧不裸断；失败消息手动重试——重发前按内容去掉 advisor 流式前已落库的重复 user 消息，这个坑靠读 Spring AI 源码证实）。
 
 ---
 
@@ -121,4 +121,3 @@
 
 1. **单用户假设**：`ToolCallNotifier` 用全局 `AtomicReference` 持有当前 sink，不支持并发对话；生产化需换 request-scoped 上下文。
 2. **上下文硬截断**：100 条窗口外历史直接丢（→ roadmap P1 #6 摘要压缩）。
-3. **SSE 链路无错误帧**：LLM 异常时前端只能靠断流猜测；`aiExpand` 有 TextDecoder 跨 chunk 乱码隐患（→ roadmap P1 #7；停止生成已落地）。
