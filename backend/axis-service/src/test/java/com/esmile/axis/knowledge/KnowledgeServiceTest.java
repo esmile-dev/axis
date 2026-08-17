@@ -18,6 +18,7 @@ import com.esmile.axis.knowledge.importer.KnowledgeFileStorage;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import com.esmile.axis.knowledge.search.KnowledgeIndexService;
+import com.esmile.axis.knowledge.search.KnowledgeItemUpdatedEvent;
 import com.esmile.axis.repository.InboxItemRepository;
 import com.esmile.axis.service.InboxService;
 import org.junit.jupiter.api.BeforeEach;
@@ -415,6 +416,30 @@ class KnowledgeServiceTest {
         assertThat(view.status()).isEqualTo(KnowledgeStatus.DONE);
         assertThat(view.progress()).isEqualTo(100);
         assertThat(view.tags()).containsExactly("x");
+    }
+
+    @Test
+    void update_titleChanged_publishesReindexEvent() {
+        KnowledgeItem item = item("i1", "原标题");
+        when(itemRepository.findById("i1")).thenReturn(Optional.of(item));
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(artifactRepository.findByItemId("i1")).thenReturn(List.of());
+
+        service.update("i1", new UpdateKnowledgeItemRequest("新标题", null, null, null));
+
+        verify(eventPublisher).publishEvent(new KnowledgeItemUpdatedEvent("i1"));
+    }
+
+    @Test
+    void update_titleUnchanged_skipsReindexEvent() {
+        KnowledgeItem item = item("i1", "原标题");
+        when(itemRepository.findById("i1")).thenReturn(Optional.of(item));
+        when(itemRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(artifactRepository.findByItemId("i1")).thenReturn(List.of());
+
+        service.update("i1", new UpdateKnowledgeItemRequest("原标题", KnowledgeStatus.DONE, 100, Set.of("x")));
+
+        verify(eventPublisher, never()).publishEvent(any(KnowledgeItemUpdatedEvent.class));
     }
 
     @Test

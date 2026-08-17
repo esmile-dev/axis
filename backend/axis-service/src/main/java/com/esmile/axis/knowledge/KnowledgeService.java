@@ -17,6 +17,7 @@ import com.esmile.axis.knowledge.importer.KnowledgeFileStorage;
 import com.esmile.axis.knowledge.repository.KnowledgeArtifactRepository;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import com.esmile.axis.knowledge.search.KnowledgeIndexService;
+import com.esmile.axis.knowledge.search.KnowledgeItemUpdatedEvent;
 import com.esmile.axis.repository.InboxItemRepository;
 import com.esmile.axis.service.InboxService;
 import lombok.RequiredArgsConstructor;
@@ -157,7 +158,12 @@ public class KnowledgeService {
     @Transactional
     public KnowledgeItemDetailView update(String id, UpdateKnowledgeItemRequest req) {
         KnowledgeItem item = findOrThrow(id);
-        if (req.title() != null) item.setTitle(req.title());
+        // 仅标题实际变化才触发向量重建（标题前置进每条 chunk 参与 embedding）；
+        // status/progress/tags 不进向量，不为它们白调 embedding API
+        if (req.title() != null && !req.title().equals(item.getTitle())) {
+            item.setTitle(req.title());
+            eventPublisher.publishEvent(new KnowledgeItemUpdatedEvent(id));
+        }
         if (req.status() != null) item.setStatus(req.status());
         if (req.progress() != null) item.setProgress(req.progress());
         if (req.tags() != null) item.setTags(new HashSet<>(req.tags()));

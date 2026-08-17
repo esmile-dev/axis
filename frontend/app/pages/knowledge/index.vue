@@ -145,6 +145,7 @@ async function selectItem(id: string) {
   progressRestored = false // 新条目重新允许一次滚动位置恢复
   pollTimedOut.value = false
   tagInput.value = ''
+  editingTitle.value = false // 放弃进行中的标题编辑，避免草稿串到下一个条目
   // 恢复「脑图首次可见才挂载」的不变量（mindmapMounted 跨条目保留会导致在隐藏容器里 0×0 挂载、
   // fit 出 scale 0 的空白脑图）；停留在脑图 tab 时新详情到达即可见，允许直接挂载
   mindmapMounted.value = activeTab.value === 'mindmap'
@@ -306,6 +307,56 @@ function removeTag(tag: string) {
   const d = detail.value
   if (!d) return
   updateTags(d.tags.filter(t => t !== tag))
+}
+
+// 标题编辑：点标题进入编辑，Enter/失焦保存，Esc 取消，空标题视为取消；乐观更新失败回滚。
+// 标题实际变化会触发服务端向量重建（标题前置进每条 chunk 参与 embedding）
+const editingTitle = ref(false)
+const titleDraft = ref('')
+const titleInputRef = ref<HTMLInputElement | null>(null)
+
+async function startEditTitle() {
+  const d = detail.value
+  if (!d) return
+  titleDraft.value = d.title
+  editingTitle.value = true
+  await nextTick()
+  titleInputRef.value?.focus()
+  titleInputRef.value?.select()
+}
+
+// Esc 取消先于失焦：editingTitle 已置 false，失焦触发的 saveTitle 直接返回，不会误存
+async function saveTitle() {
+  if (!editingTitle.value) return
+  editingTitle.value = false
+  const d = detail.value
+  if (!d) return
+  const title = titleDraft.value.trim()
+  if (!title || title === d.title) return
+  const previous = d.title
+  d.title = title
+  localFirst.updateItem(d.id, { title })
+  try {
+    await api(`/api/knowledge/${d.id}`, { method: 'PATCH', body: { title } })
+  } catch (err) {
+    if (detail.value === d) d.title = previous
+    localFirst.updateItem(d.id, { title: previous })
+    console.error('Failed to update title:', err)
+  }
+}
+
+function cancelEditTitle() {
+  editingTitle.value = false
+}
+
+// Enter 保存需排除输入法组词中的回车（isComposing），同 chat 输入框处理
+function onTitleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.isComposing) {
+    e.preventDefault()
+    saveTitle()
+  } else if (e.key === 'Escape') {
+    cancelEditTitle()
+  }
 }
 
 // Add dialog
@@ -572,7 +623,23 @@ onMounted(() => {
                   返回列表
                 </button>
 
-                <h2 class="text-xl font-bold tracking-tight leading-snug">{{ detail.title }}</h2>
+                <h2
+                  v-if="!editingTitle"
+                  class="text-xl font-bold tracking-tight leading-snug cursor-text rounded px-1 -mx-1 hover:bg-secondary/30 transition-colors"
+                  title="点击编辑标题"
+                  @click="startEditTitle"
+                >
+                  {{ detail.title }}
+                </h2>
+                <input
+                  v-else
+                  ref="titleInputRef"
+                  v-model="titleDraft"
+                  type="text"
+                  class="w-full text-xl font-bold tracking-tight leading-snug bg-secondary/20 border border-border/40 rounded px-1 -mx-1 focus:ring-1 focus:ring-primary focus:border-primary focus:outline-none"
+                  @keydown="onTitleKeydown"
+                  @blur="saveTitle"
+                />
               </div>
               <div class="flex items-center gap-1 shrink-0">
                 <Button
