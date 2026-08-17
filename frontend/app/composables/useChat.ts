@@ -52,6 +52,9 @@ export function useChat() {
   const initialized = useState<boolean>('chat-initialized', () => false)
   const pendingConfirm = useState<PendingConfirm | null>('chat-pending-confirm', () => null)
 
+  // 当前流式请求的取消控制器（stop() 中止）
+  let abortController: AbortController | null = null
+
   const api = useApi()
 
   async function loadConversations() {
@@ -124,10 +127,12 @@ export function useChat() {
 
     try {
       const { public: { apiBase } } = useRuntimeConfig()
+      abortController = new AbortController()
       const response = await fetch(`${apiBase}/api/agent/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content, sessionId: activeId.value })
+        body: JSON.stringify({ message: content, sessionId: activeId.value }),
+        signal: abortController.signal
       })
       if (!response.ok || !response.body) {
         throw new Error(`HTTP ${response.status}`)
@@ -166,12 +171,20 @@ export function useChat() {
         }
       }
     } catch (e) {
-      console.error('Chat request failed', e)
-      assistant.error = true
-      if (!assistant.content) {
-        assistant.content = '请求失败，请确认后端服务已启动、AI 配置可用后重试。'
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        // 用户主动停止：保留已生成的部分内容，不视为错误
+        if (!assistant.content && assistant.toolCalls.length === 0) {
+          assistant.content = '*已停止生成*'
+        }
+      } else {
+        console.error('Chat request failed', e)
+        assistant.error = true
+        if (!assistant.content) {
+          assistant.content = '请求失败，请确认后端服务已启动、AI 配置可用后重试。'
+        }
       }
     } finally {
+      abortController = null
       assistant.streaming = false
       sending.value = false
       pendingConfirm.value = null
@@ -182,6 +195,11 @@ export function useChat() {
         setTimeout(() => loadConversations(), 3000)
       }
     }
+  }
+
+  /** 中止当前流式生成（前端断开 SSE，后端流中断按约定收尾） */
+  function stop() {
+    abortController?.abort()
   }
 
   /** 危险操作确认回调：放行/拒绝后端挂起中的删除类 tool，卡片乐观消失 */
@@ -228,7 +246,7 @@ export function useChat() {
 
   return {
     conversations, activeId, messages, memories, sending, loadingHistory, pendingConfirm,
-    init, selectConversation, newConversation, deleteConversation, send,
+    init, selectConversation, newConversation, deleteConversation, send, stop,
     respondConfirm, loadMemories, deleteMemory
   }
 }

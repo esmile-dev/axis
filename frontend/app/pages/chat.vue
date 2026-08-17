@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Send, Loader2, Plus, Wrench, Sparkles, Trash2, Brain, MessageSquare, AlertTriangle } from 'lucide-vue-next'
+import { Send, Loader2, Plus, Wrench, Sparkles, Trash2, Brain, MessageSquare, AlertTriangle, Square } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
@@ -12,7 +12,7 @@ import {
 
 const {
   conversations, activeId, messages, memories, sending, loadingHistory, pendingConfirm,
-  init, selectConversation, newConversation, deleteConversation, send, respondConfirm, deleteMemory
+  init, selectConversation, newConversation, deleteConversation, send, stop, respondConfirm, deleteMemory
 } = useChat()
 
 const input = ref('')
@@ -49,7 +49,8 @@ function handleSend() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  // 输入法组词中（拼音未上屏）按 Enter 是确认候选词，不触发发送
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault()
     handleSend()
   }
@@ -224,7 +225,10 @@ function formatTime(iso: string) {
             :disabled="sending"
             @keydown="handleKeydown"
           />
-          <Button size="icon" :disabled="!input.trim() || sending" @click="handleSend">
+          <Button v-if="sending" size="icon" variant="outline" title="停止生成" @click="stop">
+            <Square class="w-4 h-4" />
+          </Button>
+          <Button v-else size="icon" :disabled="!input.trim()" @click="handleSend">
             <Send class="w-4 h-4" />
           </Button>
         </div>
