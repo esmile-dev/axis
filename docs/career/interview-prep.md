@@ -3,16 +3,18 @@
 ## 学习路线图（建议顺序，编号对应 feature-roadmap.md）
 
 ```
-第 1 周：  #3 Structured Output (S) + #7 SSE 健壮性 (S) + #8 向量一致性 (S)
-           → 三个小改动热身，顺便清掉已知 bug
-第 2-3 周：#1 混合检索 + rerank → #2 两段式 RAG + citation
-           → RAG 深度线，面试核心战场，配评测数字
-第 4 周：  #4 Human-in-the-loop + #5 可观测性
-           → Agent 安全线 + 生产化线
-之后按余力：#6 上下文压缩 → #9 MCP → #10 LLM-as-judge → #11 reindex 任务化
+已完成：  #3 Structured Output + #1 混合检索 rerank + #2 RAG 问答 citation + #4 Human-in-the-loop
+           → P0 全收官；#7 部分完成（AbortController + 停止按钮已落地）
+第 1 步：  #8 向量一致性 (S, 半天) + #7 收尾 error 帧 / aiExpand decoder (S, 半天)
+           → 清掉自己暴露过的坑，"发现即修复"叙事闭环
+第 2 步：  #5 可观测性 (S~M, 1~2 天)
+           → 生产化板块最后的弱答案；LLM 调用已收口 ChatGateway 单点，拦截成本低
+第 3 步：  #6 上下文压缩 (M, 2~3 天)
+           → "长对话上下文超限" 从弱答案变完整答案（窗口 → 摘要压缩）
+之后按余力：#9 MCP → #10 LLM-as-judge → #11 reindex 任务化
 ```
 
-每个 feature 按 `docs/workflow.md` 分级走（S 直接改，M 写 lite-spec）——本身也能讲："我用 spec-driven 流程 + AI 辅助开发完成这个项目"，呼应方法论沉淀。
+每个 feature 按 `.agents/skills/` 技能流分级走（S 直接改，M 写 lite-spec 落 `.scratch/<feature>/`）——本身也能讲："我用 spec-driven 流程 + AI 辅助开发完成这个项目"，呼应方法论沉淀。
 
 ---
 
@@ -26,13 +28,13 @@
 - **权衡**：为什么不用 MarkdownDocumentReader（输入要 Resource，语料在 DB）、为什么不用 LLM metadata enricher（2.0 已移除）
 - **结果**：golden 数据集回归测试，坏边界率 96% → 1.2%，阈值 ≤5% 进 CI 门禁
 
-有数字的结果最硬。做完混合检索记得补命中率对比数字。
+有数字的结果最硬。混合检索已拿到可讲的数字：hit@1 0.79→0.96、hit@3/5→1.00（24 条 golden，真实 PG + embedding）。
 
 ### 2. 主动暴露 1~2 个已知局限 + 改进计划
 
 推荐讲这两个（清单见 existing-features.md 末尾）：
 - "目前是单用户假设，ToolCallNotifier 不支持并发对话，生产化需要换 request-scoped 上下文"
-- "检索目前是裸向量，混合检索 + rerank 已在路线图上"（做完后改讲别的局限）
+- "长对话目前是 100 条硬窗口截断，早期上下文直接丢——摘要压缩在路线图上（roadmap #6）"
 
 主动讲比被问出来强十倍，且把节奏控制在准备好的领域。
 

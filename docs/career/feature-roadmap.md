@@ -2,7 +2,7 @@
 
 按面试性价比排序：P0 不做会被问穿、做了直接加分；P1 拉开与玩具项目的差距；P2 加分项。
 
-每项结构：为什么值得做 → 学到什么 → 实现要点 → 工作量。完成后勾掉并补 commit hash。
+每项结构：为什么值得做 → 学到什么 → 实现要点 → 工作量。完成后勾掉即可，不回填 commit hash（追溯靠 commit message 里的 feature 名，避免纯文档提交）。
 
 ---
 
@@ -84,21 +84,33 @@
 
 **工作量**：M，2~3 天。
 
-### 7. SSE 流式健壮性：取消 + 错误帧 + 重试
+### 7. SSE 流式健壮性：错误帧 + 手动重试 + aiExpand decoder（取消已完成）
 
-- [ ] 状态：未开始
+- [ ] 状态：部分完成（2026-08-17，`184c0fc`：前端 AbortController + 停止按钮已落地；剩余 error 帧、手动重试、`aiExpand` decoder 修复）
 
-**为什么**：当前无 AbortController（无法停止生成）、无错误帧（LLM 挂了前端只能猜）、`aiExpand` 有 TextDecoder 跨 chunk 乱码隐患。**修 bug 的叙事比堆 feature 更打动资深面试官**——"我发现并修复了流式链路的 X 个问题"。
+**为什么**：流式链路是本项目差异化卖点（existing-features #3），但错误处理仍是黑盒——LLM 中途挂掉时 HTTP 200 早已提交、SSE 连接直接断开，前端只能靠 catch 猜一句通用文案（`useChat.ts:179-185`）；`aiExpand` 每个 chunk 新建 `TextDecoder`（`projects/[id].vue:194`），多字节中文字符跨 chunk 必乱码，且失败时只 `console.error` 无用户可见反馈。**修 bug 的叙事比堆 feature 更打动资深面试官**——"我发现并修复了流式链路的 X 个问题"。
 
-**实现要点**：前端加 AbortController + 停止按钮；协议加 `{"type":"error","message":...}` 帧（`onErrorResume` 映射）；`aiExpand` 的 decoder 改为复用 + `{stream:true}`。
+**学到什么**：流式协议的错误语义（响应头一旦提交，HTTP 层无法再报错，只能靠应用层错误帧传失败信息——这是流式 API 设计的关键认知）；Reactor 错误处理操作符谱系（`onErrorResume`/`onErrorReturn`/`doOnError`/`doFinally` 的区别与顺序）；取消信号的端到端传播（AbortController → fetch 断流 → WebFlux cancel → `doFinally` 收尾，确认门的 `rejectAllPending` 就挂在这里）；`TextDecoder({stream:true})` 的多字节缓冲原理。
+
+**实现要点**（贴合现有代码）：
+- `ChatEvent` 加 `record Error(String message)`——sealed 接口让 `AgentController.toSse` 的 switch 编译期强制补映射 `{"type":"error","message":...}`。（命名注意遮蔽 `java.lang.Error`，也可叫 `Fail`。）
+- `AgentService.chat()`：`.concatWith(Done)` 之后接 `.onErrorResume(e -> Flux.just(new Error(可读文案), new Done()))`——错误帧后照常发 done，前端状态干净复位；`doFinally` 已有收尾（`toolCallNotifier.end()` + `rejectAllPending`）不受影响。异常映射成可读文案（AI 服务不可用/限流等），堆栈只进日志不进帧。
+- 前端 `useChat` 解析 error 帧：复用已有 `assistant.error` 状态，显示后端下发的文案，保留已生成的部分内容。
+- error 消息旁加手动"重试"按钮：移除失败的 assistant 占位、重发同一用户消息（不重复 push user 消息，`send` 需要加复用路径）。**先验证**：流中途出错时 `MessageChatMemoryAdvisor` 是否落库部分消息（Spring AI 流式在完成时才 saveAll）——若落库了，重试会产生双份 user 消息，需要先处理。
+- `aiExpand`：decoder 提出循环复用 + `decode(value, {stream:true})`（对齐 `useChat.ts:142,148` 的既有写法）；catch 到错误时给用户可见反馈。
+- 可选：同模式扩展到 `/api/knowledge/ask`（sources/token/done 同样是裸 Flux 链）。
+
+**范围外**：自动重试（SSE 聊天盲目自动重发可能重复扣费/重复生成，只做手动重试）；确认挂起期间断连导致的"无观众 LLM 调用"（已在 agent-dangerous-confirm lite-spec 登记为已知边界，框架级取消成本高，不修）。
+
+**验收**：配错 AI key 或停掉模型端点后发消息 → 前端显示后端下发的具体错误帧而非通用猜测文案，done 帧照常到达、流状态复位干净；单测覆盖 chat 错误路径（Error + Done 帧序列）；`aiExpand` 长中文文本无乱码；`mvn test` 全绿 + `npm run build` 通过。
 
 **工作量**：S，1 天。
 
-### 8. 向量与条目数据一致性
+### 8. 向量与条目数据一致性（落地为"标题编辑 + 一致性设计"）
 
-- [ ] 状态：未开始
+- [x] 状态：已完成（2026-08-17）。实施前确认前端/Agent 均无 title 更新入口（漂移当时不可达，属潜在缺口），遂升级为功能交付：详情页标题内联编辑（Enter/失焦保存、Esc 取消、乐观更新失败回滚、IME 组词回车排除）+ 后端 `update()` 仅在 title 实际变化时发 `KnowledgeItemUpdatedEvent`（`search` 包），AFTER_COMMIT 异步 listener（knowledgeTaskExecutor）调幂等 `indexItem`；status/progress/tags 变化不触发（不进向量，不白调 embedding）。`KnowledgeServiceTest` +2 用例、`KnowledgeIndexListenerTest` +1，全量 `mvn test` 绿
 
-**为什么**：`KnowledgeService.update()` 改标题不触发 reindex，向量库与 DB 漂移。**主动讲"我发现了一致性缺口并修复"比被问出来强十倍**。
+**为什么**：`KnowledgeService.update()` 改标题不触发 reindex，向量库与 DB 漂移。**主动讲"我发现了一致性缺口并修复"比被问出来强十倍**。叙事落地版："给知识库加标题编辑能力时，把派生数据一致性作为功能验收的一部分设计——精准失效（只 title 触发）+ 幂等重放 + AFTER_COMMIT 对齐既有事件管线"。
 
 **实现要点**：update 触发 `indexItem`（先删后写，复用现有幂等逻辑），或引入版本戳/事件驱动同步。
 

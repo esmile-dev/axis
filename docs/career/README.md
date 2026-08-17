@@ -4,15 +4,15 @@
 
 ## 文件索引
 
-- [existing-features.md](./existing-features.md)：项目中**已有**的可包装 feature（7 个），每个附简历写法、背后技术、面试官深挖点
-- [feature-roadmap.md](./feature-roadmap.md)：建议**补充**的 feature（P0/P1/P2 排序），附学习内容、实现要点、工作量，可勾选跟踪
+- [existing-features.md](./existing-features.md)：项目中**已有**的可包装 feature（8 个），每个附简历写法、背后技术、面试官深挖点
+- [feature-roadmap.md](./feature-roadmap.md)：建议**补充**的 feature（P0/P1/P2 排序），附学习内容、实现要点、工作量，可勾选跟踪。**P0 四项已全部完成**（混合检索 / RAG 引用问答 / structured output / 确认门），当前推进 P1
 - [interview-prep.md](./interview-prep.md)：学习路线图 + 面试叙事建议
 
 ## 项目定位（简历项目描述）
 
 > **Axis —— 基于 Spring AI 的个人 AI 工作站（Agent + RAG）**
 >
-> 全栈 AI 应用：以 LLM Agent 为核心，通过 Tool Calling 操作 Inbox/待办/项目/知识库四大领域；知识库基于 pgvector 实现语义检索（自研 token 级分块器）；内置 RSS 每日技术摘要生成管线（LLM 精读 + 主编润色）；全链路流式 SSE 交互。
+> 全栈 AI 应用：以 LLM Agent 为核心，通过 Tool Calling 操作 Inbox/待办/项目/知识库四大领域，删除类危险操作经 Human-in-the-loop 确认门放行；知识库基于 pgvector 实现混合检索 RAG（自研 token 级分块器 + 向量/关键词 RRF 融合 + 带引用的两段式问答）；内置 RSS 每日技术摘要生成管线（LLM 精读 + 主编润色，输出走 structured output 契约）；全链路流式 SSE 交互。
 
 **技术栈**：Spring Boot 4 / Spring AI 2.0 / Java 21 / PostgreSQL 18 + pgvector / Nuxt 4 + Vue 3
 
