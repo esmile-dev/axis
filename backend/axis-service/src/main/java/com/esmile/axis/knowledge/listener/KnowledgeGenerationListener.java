@@ -1,5 +1,8 @@
-package com.esmile.axis.knowledge.generate;
+package com.esmile.axis.knowledge.listener;
 
+import com.esmile.axis.knowledge.generate.KnowledgeArtifactGenerator;
+import com.esmile.axis.knowledge.generate.KnowledgeArtifactRegenerationEvent;
+import com.esmile.axis.knowledge.generate.KnowledgeItemCreatedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;

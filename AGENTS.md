@@ -159,6 +159,7 @@ psql "postgresql://axis_readonly:axis_readonly@localhost:5432/axis"
 - `Optional` 只作返回值，不作字段/参数
 - 集合过滤/转换/聚合默认 Stream 链式
 - 构造器注入，禁止字段注入 `@Autowired`
+- 事件监听器统一收口到领域 `listener/` 包（如 `knowledge/listener/`），便于快速定位；事件 record 留在各自领域包
 - 金额禁止 `float`/`double`；DTO 边界用 `BigDecimal` + Bean Validation，进入领域立即转 Money
 - 日志用占位符 `log.info("x={}", x)`，禁止字符串拼接和 `System.out`
 - 前端组件目录只扫描 `.vue`（见 `nuxt.config.ts`），避免 `index.ts` 命名冲突
