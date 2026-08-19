@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Plus, GripVertical, Sparkles, Cloud, CloudOff, ArrowLeft, Bug, Lightbulb, Wrench, AlertCircle, Circle, CircleDot, CircleCheck } from 'lucide-vue-next'
+import { Plus, GripVertical, Sparkles, Cloud, CloudOff, ArrowLeft, Bug, Lightbulb, Wrench, AlertCircle, Circle, CircleDot, CircleCheck, CircleX } from 'lucide-vue-next'
 import IssueCreator from '@/components/IssueCreator.vue'
 
-type IssueStatus = 'TODO' | 'IN_PROGRESS' | 'DONE'
+type IssueStatus = 'TODO' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED'
 type IssuePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 type IssueType = 'BUG' | 'FEATURE' | 'IMPROVEMENT'
 type ProjectStatus = 'PLANNING' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED'
@@ -43,13 +43,15 @@ const optimistic = useOptimistic(localFirst)
 const columns: { status: string; label: string; color: string }[] = [
   { status: 'TODO', label: 'Todo', color: 'bg-blue-500' },
   { status: 'IN_PROGRESS', label: 'In Progress', color: 'bg-yellow-500' },
-  { status: 'DONE', label: 'Done', color: 'bg-green-500' }
+  { status: 'DONE', label: 'Done', color: 'bg-green-500' },
+  { status: 'CANCELLED', label: 'Cancelled', color: 'bg-red-500' }
 ]
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
   TODO: { label: 'Todo', color: 'text-gray-400', icon: Circle },
   IN_PROGRESS: { label: 'In Progress', color: 'text-yellow-400', icon: CircleDot },
-  DONE: { label: 'Done', color: 'text-green-400', icon: CircleCheck }
+  DONE: { label: 'Done', color: 'text-green-400', icon: CircleCheck },
+  CANCELLED: { label: 'Cancelled', color: 'text-red-400', icon: CircleX }
 }
 
 const priorityConfig: Record<string, { label: string; color: string; icon: any }> = {
@@ -69,7 +71,8 @@ const issuesByStatus = computed(() => {
   const groups: Record<string, Issue[]> = {
     'TODO': [],
     'IN_PROGRESS': [],
-    'DONE': []
+    'DONE': [],
+    'CANCELLED': []
   }
   localFirst.items.value.forEach((issue: Issue) => {
     const statusGroup = groups[issue.status]
