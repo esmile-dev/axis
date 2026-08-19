@@ -76,7 +76,7 @@
 
 ### 6. 上下文压缩（替代硬窗口截断）
 
-- [ ] 状态：未开始
+- [x] 状态：已完成（2026-08-19，`.scratch/context-compression/lite-spec.md`；预压缩方案：请求开始前检查，超 100 条时最旧 30 条 + 已有摘要滚动合并进 `chat_conversation.summary` 并注入 system prompt，窗口恒留 30 条余量使 window memory 内部裁剪不触发；失败静默降级硬截断；`LlmFeature.MEMORY_COMPRESS` 进用量面板；`ConversationCompressionEval` 真实 LLM 关键词 3/3 + 滚动合并验证；E2E 验证摘要生成/旧消息删除/凭摘要答出已删原文。表结构走 V2 增量迁移保留本地数据）
 
 **为什么**：短期记忆 100 条硬截断会丢失早期关键信息。标准解法"窗口 + 摘要压缩"：超窗旧消息由 LLM 压缩成摘要放 system prompt。面试官问"长对话怎么处理上下文限制"的进阶答案（配合"为什么不用无限拉长 prompt"——成本、注意力稀释）。
 
