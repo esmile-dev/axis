@@ -53,6 +53,8 @@ public class AiConfigService {
 
     private final AiConfigProfileRepository profileRepository;
     private final ApplicationEventPublisher eventPublisher;
+    /** 传入手动构造的 OpenAiChatModel，开启 Spring AI 内建的模型层观测（token 用量等指标）。 */
+    private final io.micrometer.observation.ObservationRegistry observationRegistry;
 
     @Value("${AXIS_ENCRYPTION_PASSWORD:dev-only-do-not-use-in-prod}")
     private String encryptionPassword;
@@ -267,7 +269,10 @@ public class AiConfigService {
                 .baseUrl(cfg.endpoint())
                 .model(cfg.model())
                 .build();
-        OpenAiChatModel chatModel = OpenAiChatModel.builder().options(chatOpts).build();
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .options(chatOpts)
+                .observationRegistry(observationRegistry)
+                .build();
         return ChatClient.create(chatModel);
     }
 

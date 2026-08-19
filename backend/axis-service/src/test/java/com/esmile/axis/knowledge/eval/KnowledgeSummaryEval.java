@@ -2,6 +2,7 @@ package com.esmile.axis.knowledge.eval;
 
 import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.config.ChatGateway;
+import com.esmile.axis.llm.LlmCallLogger;
 import com.esmile.axis.knowledge.ArtifactKind;
 import com.esmile.axis.knowledge.KnowledgeType;
 import com.esmile.axis.knowledge.entity.KnowledgeArtifact;
@@ -120,7 +121,7 @@ class KnowledgeSummaryEval {
         Mockito.when(aiConfigService.get()).thenReturn(chatClient);
         Mockito.when(aiConfigService.getConfig()).thenReturn(
                 new AiConfigService.ResolvedConfig(null, "eval", "key", baseUrl, model, "env"));
-        chatGateway = new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class));
+        chatGateway = new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class), Mockito.mock(LlmCallLogger.class));
     }
 
     record GoldenArticle(String id, String title, String content, String lang) {

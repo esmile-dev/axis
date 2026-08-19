@@ -2,6 +2,7 @@ package com.esmile.axis.knowledge.eval;
 
 import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.config.ChatGateway;
+import com.esmile.axis.llm.LlmCallLogger;
 import com.esmile.axis.knowledge.KnowledgeType;
 import com.esmile.axis.knowledge.chat.KnowledgeAskService;
 import com.esmile.axis.knowledge.entity.KnowledgeItem;
@@ -170,7 +171,7 @@ class KnowledgeAskEval {
         HybridKnowledgeSearchService hybrid = new HybridKnowledgeSearchService(
                 vectorLane, keywordLane, (query, candidates) -> candidates, 10);
         askService = new KnowledgeAskService(hybrid, itemRepository,
-                new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class)));
+                new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class), Mockito.mock(LlmCallLogger.class)));
     }
 
     @AfterAll

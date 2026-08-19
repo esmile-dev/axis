@@ -6,12 +6,16 @@ import com.esmile.axis.ai.tool.KnowledgeTool;
 import com.esmile.axis.ai.tool.MemoryTool;
 import com.esmile.axis.ai.tool.ProjectTool;
 import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.llm.LlmCallLogger;
+import com.esmile.axis.llm.LlmCallTracker;
+import com.esmile.axis.llm.LlmFeature;
 import com.esmile.axis.service.ChatHistoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
@@ -37,6 +41,7 @@ public class AgentService {
     private final ToolCallNotifier toolCallNotifier;
     private final ConfirmationService confirmationService;
     private final ChatHistoryService chatHistoryService;
+    private final LlmCallLogger llmCallLogger;
 
     public Flux<ChatEvent> chat(String message, String sessionId) {
         return chat(message, sessionId, false);
@@ -54,6 +59,7 @@ public class AgentService {
         boolean newConversation = !chatHistoryService.conversationExists(sessionId);
         Sinks.Many<ChatEvent> toolEvents = toolCallNotifier.begin();
 
+        LlmCallTracker tracker = llmCallLogger.start(LlmFeature.AGENT_CHAT);
         Flux<ChatEvent> tokenFlux = chatClient().prompt()
                 .system(systemPrompt())
                 .user(message)
@@ -61,9 +67,14 @@ public class AgentService {
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, sessionId))
                 .tools(inboxTool, issueTool, projectTool, knowledgeTool, memoryTool)
                 .stream()
-                .content()
+                .chatResponse()
+                .doOnNext(cr -> tracker.captureUsage(cr.getMetadata().getUsage()))
+                // usage-only 末帧没有内容（choices 为空），getResult() 为 null，滤掉
+                .mapNotNull(cr -> cr.getResult() != null ? cr.getResult().getOutput().getText() : null)
                 .<ChatEvent>map(ChatEvent.Token::new)
                 .concatWith(Flux.just(new ChatEvent.Done()))
+                .doOnComplete(tracker::success)
+                .doOnError(tracker::error)
                 .doFinally(signalType -> {
                     toolCallNotifier.end();
                     // 断连/正常结束时取消挂起中的人工确认（按拒绝放行，不遗留悬挂线程）
@@ -86,14 +97,24 @@ public class AgentService {
     /** 非流式对话：与 {@link #chat} 同一套编排，改走 {@code .call()} */
     public String chatSync(String message, String sessionId) {
         boolean newConversation = !chatHistoryService.conversationExists(sessionId);
-        String content = chatClient().prompt()
-                .system(systemPrompt())
-                .user(message)
-                .advisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, sessionId))
-                .tools(inboxTool, issueTool, projectTool, knowledgeTool, memoryTool)
-                .call()
-                .content();
+        LlmCallTracker tracker = llmCallLogger.start(LlmFeature.AGENT_CHAT);
+        String content;
+        try {
+            ChatResponse response = chatClient().prompt()
+                    .system(systemPrompt())
+                    .user(message)
+                    .advisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                    .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, sessionId))
+                    .tools(inboxTool, issueTool, projectTool, knowledgeTool, memoryTool)
+                    .call()
+                    .chatResponse();
+            tracker.captureUsage(response.getMetadata().getUsage());
+            tracker.success();
+            content = response.getResult().getOutput().getText();
+        } catch (Exception e) {
+            tracker.error(e);
+            throw e;
+        }
         if (newConversation) {
             chatHistoryService.generateAndUpgradeTitle(sessionId, message);
         }
@@ -116,11 +137,16 @@ public class AgentService {
                 保持简洁可执行。
                 """, title);
 
+        LlmCallTracker tracker = llmCallLogger.start(LlmFeature.PRD_EXPAND);
         return chatClient().prompt()
                 .user(prompt)
                 .tools(knowledgeTool)
                 .stream()
-                .content();
+                .chatResponse()
+                .doOnNext(cr -> tracker.captureUsage(cr.getMetadata().getUsage()))
+                .mapNotNull(cr -> cr.getResult() != null ? cr.getResult().getOutput().getText() : null)
+                .doOnComplete(tracker::success)
+                .doOnError(tracker::error);
     }
 
     /** 基础 prompt + 注入长期记忆（最多 50 条） */

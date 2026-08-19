@@ -6,6 +6,9 @@ import com.esmile.axis.ai.tool.KnowledgeTool;
 import com.esmile.axis.ai.tool.MemoryTool;
 import com.esmile.axis.ai.tool.ProjectTool;
 import com.esmile.axis.config.AiConfigService;
+import com.esmile.axis.llm.LlmCallLogger;
+import com.esmile.axis.llm.LlmCallTracker;
+import com.esmile.axis.llm.LlmFeature;
 import com.esmile.axis.service.ChatHistoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +18,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.DefaultUsage;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -23,12 +32,15 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
  * {@link AgentService#chat} 事件流：正常路径 token→done；
  * LLM 流失败 → error 帧 + done（不裸断流），且确认门兜底放行仍执行。
+ * 每次对话经 {@link LlmCallLogger} 记录为一次 AGENT_CHAT 调用。
  */
 @ExtendWith(MockitoExtension.class)
 class AgentServiceTest {
@@ -52,6 +64,10 @@ class AgentServiceTest {
     @Mock
     private ChatHistoryService chatHistoryService;
     @Mock
+    private LlmCallLogger llmCallLogger;
+    @Mock
+    private LlmCallTracker tracker;
+    @Mock
     private ChatClient chatClient;
     @Mock
     private ChatClient.ChatClientRequestSpec spec;
@@ -63,11 +79,25 @@ class AgentServiceTest {
     @BeforeEach
     void setUp() {
         service = new AgentService(aiConfigService, chatMemory, inboxTool, issueTool, projectTool,
-                knowledgeTool, memoryTool, new ToolCallNotifier(), confirmationService, chatHistoryService);
+                knowledgeTool, memoryTool, new ToolCallNotifier(), confirmationService, chatHistoryService,
+                llmCallLogger);
+        lenient().when(llmCallLogger.start(any())).thenReturn(tracker);
+    }
+
+    private static ChatResponse resp(String text, Usage usage) {
+        ChatResponseMetadata metadata = usage != null
+                ? ChatResponseMetadata.builder().usage(usage).build()
+                : ChatResponseMetadata.builder().build();
+        return new ChatResponse(List.of(new Generation(new AssistantMessage(text))), metadata);
+    }
+
+    /** OpenAI 流式末帧：只带 usage 没有内容（choices 为空）。 */
+    private static ChatResponse usageOnlyFrame(Usage usage) {
+        return new ChatResponse(List.of(), ChatResponseMetadata.builder().usage(usage).build());
     }
 
     /** 链路 mock 对齐 ChatGatewayTest 用法；会话视为已存在（跳过标题生成分支）。 */
-    private void stubChatChain(Flux<String> content) {
+    private void stubChatChain(Flux<ChatResponse> responses) {
         when(chatHistoryService.conversationExists(anyString())).thenReturn(true);
         when(chatHistoryService.listMemories()).thenReturn(List.of());
         when(aiConfigService.get()).thenReturn(chatClient);
@@ -78,12 +108,12 @@ class AgentServiceTest {
         when(spec.advisors(any(Consumer.class))).thenReturn(spec);
         when(spec.tools(any(Object[].class))).thenReturn(spec);
         when(spec.stream()).thenReturn(streamSpec);
-        when(streamSpec.content()).thenReturn(content);
+        when(streamSpec.chatResponse()).thenReturn(responses);
     }
 
     @Test
     void chat_llmStreamCompletes_emitsTokensThenDone() {
-        stubChatChain(Flux.just("你", "好"));
+        stubChatChain(Flux.just(resp("你", null), resp("好", null)));
 
         List<ChatEvent> events = service.chat("问题", "s1").collectList().block();
 
@@ -105,12 +135,38 @@ class AgentServiceTest {
 
     @Test
     void chat_retryTrue_removesDuplicateUserMessageBeforeStreaming() {
-        stubChatChain(Flux.just("答"));
+        stubChatChain(Flux.just(resp("答", null)));
 
         List<ChatEvent> events = service.chat("同一句话", "s1", true).collectList().block();
 
         // 流式失败时 advisor 已把 user 消息落库，重试需先按内容去重再发
         verify(chatHistoryService).removeLastUserMessageIfMatches("s1", "同一句话");
         assertThat(events).containsExactly(new ChatEvent.Token("答"), new ChatEvent.Done());
+    }
+
+    @Test
+    void chat_completes_recordsAgentChatSuccessWithLastFrameUsage() {
+        Usage usage = new DefaultUsage(100, 20, 120);
+        stubChatChain(Flux.just(resp("答", null), usageOnlyFrame(usage)));
+
+        List<ChatEvent> events = service.chat("问题", "s1").collectList().block();
+
+        // usage-only 末帧不产生 token
+        assertThat(events).containsExactly(new ChatEvent.Token("答"), new ChatEvent.Done());
+        verify(llmCallLogger).start(LlmFeature.AGENT_CHAT);
+        verify(tracker).captureUsage(usage);
+        verify(tracker).success();
+        verify(tracker, never()).error(any());
+    }
+
+    @Test
+    void chat_llmStreamFails_recordsErrorBeforeErrorFrame() {
+        RuntimeException boom = new RuntimeException("API key 无效");
+        stubChatChain(Flux.error(boom));
+
+        service.chat("问题", "s1").collectList().block();
+
+        verify(tracker).error(boom);
+        verify(tracker, never()).success();
     }
 }

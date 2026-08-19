@@ -43,7 +43,8 @@ class AiConfigServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AiConfigService(profileRepository, eventPublisher);
+        service = new AiConfigService(profileRepository, eventPublisher,
+                io.micrometer.observation.ObservationRegistry.NOOP);
         ReflectionTestUtils.setField(service, "encryptionPassword", PASSWORD);
         ReflectionTestUtils.setField(service, "encryptionSalt", SALT);
         ReflectionTestUtils.setField(service, "envApiKey", ENV_KEY);

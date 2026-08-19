@@ -2,6 +2,7 @@ package com.esmile.axis.knowledge.chat;
 
 import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.config.ChatGateway.LlmOptions;
+import com.esmile.axis.llm.LlmFeature;
 import com.esmile.axis.knowledge.ArtifactKind;
 import com.esmile.axis.knowledge.entity.KnowledgeArtifact;
 import com.esmile.axis.knowledge.entity.KnowledgeItem;
@@ -40,7 +41,7 @@ public class KnowledgeQaService {
         return chatGateway.stream(
                 KnowledgeQaPrompts.qaSystemPrompt(item.getTitle(), summary, item.getContent()),
                 message,
-                new LlmOptions(LlmOptions.DEFAULT.timeout(), conversationId(itemId)));
+                new LlmOptions(conversationId(itemId), LlmFeature.KNOWLEDGE_QA));
     }
 
     /** Conversation id rule shared with the frontend history loader and the eval. */

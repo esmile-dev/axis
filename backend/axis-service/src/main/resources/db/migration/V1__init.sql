@@ -173,3 +173,20 @@ CREATE TABLE knowledge_artifact (
     CONSTRAINT knowledge_artifact_kind_check CHECK (kind IN ('SUMMARY', 'MINDMAP')),
     CONSTRAINT fk_knowledge_artifact_item FOREIGN KEY (item_id) REFERENCES knowledge_item(id)
 );
+
+CREATE TABLE llm_call_log (
+    id character varying(30) NOT NULL,
+    completion_tokens integer,
+    created_at timestamp(6) with time zone NOT NULL,
+    duration_ms bigint NOT NULL,
+    error_message character varying(500),
+    feature character varying(30) NOT NULL,
+    model character varying(100),
+    prompt_tokens integer,
+    status character varying(10) NOT NULL,
+    total_tokens integer,
+    CONSTRAINT llm_call_log_pkey PRIMARY KEY (id),
+    CONSTRAINT llm_call_log_status_check CHECK (status IN ('SUCCESS', 'ERROR'))
+);
+
+CREATE INDEX idx_llm_call_log_created_at ON llm_call_log (created_at);

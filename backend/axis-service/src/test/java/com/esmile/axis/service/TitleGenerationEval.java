@@ -2,6 +2,7 @@ package com.esmile.axis.service;
 
 import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.config.ChatGateway;
+import com.esmile.axis.llm.LlmCallLogger;
 import com.esmile.axis.repository.ChatConversationRepository;
 import com.esmile.axis.repository.ChatLongMemoryRepository;
 import com.esmile.axis.repository.ChatMessageRepository;
@@ -64,7 +65,7 @@ class TitleGenerationEval {
                 Mockito.mock(ChatConversationRepository.class),
                 Mockito.mock(ChatMessageRepository.class),
                 Mockito.mock(ChatLongMemoryRepository.class),
-                new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class)));
+                new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class), Mockito.mock(LlmCallLogger.class)));
     }
 
     @Test

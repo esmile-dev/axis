@@ -45,6 +45,7 @@ backend/                         # Maven 多模块（父 POM packaging=pom，无
 │       ├── controller/          # REST API：Inbox/Project/Issue/Knowledge/ChatHistory/Config/FileUpload/Health
 │       ├── service/  repository/  entity/  enums/
 │       ├── digest/              # Daily Digest：fetch / classify / summarize / scheduler / service
+│       ├── llm/                 # LLM 可观测性：llm_call_log 事实日志 + 用量聚合 + Micrometer 指标
 │       └── config/              # CORS 等配置
 ├── axis-agent/                  # AI Agent 模块（依赖 axis-service，产出可执行 fat jar）
 │   └── src/main/java/com/esmile/axis/
@@ -104,6 +105,7 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 - **AI 聊天（/chat 页）**：SSE 帧为结构化 JSON——`{"type":"token","text"}` / `{"type":"tool","label"}`（由 `ToolCallNotifier` 注入）/ `{"type":"confirm","confirmId","action","detail"}`（危险操作确认请求，见下）/ `{"type":"error","message"}`（LLM 流失败，由 `AgentService.onErrorResume` 映射，后随 done）/ `{"type":"done"}`。短期记忆经 `JpaChatMemoryRepository` 落 `chat_message` 表（滑动窗口 100 条，仅存 USER/ASSISTANT），会话元数据在 `chat_conversation`（id 由前端 UUID 生成）；长期记忆在 `chat_long_memory` 表，Agent 通过 `MemoryTool` 主动保存，每次请求注入 system prompt（≤50 条）。历史/记忆 REST 在 axis-service 的 `ChatHistoryController`（`/api/agent/conversations*`、`/api/agent/memories*`）。
 - **危险操作人工确认（confirmation gate）**：删除类 tool（`deleteIssue`/`deleteInboxItem`/`deleteMemory`）不直接执行——经 `ConfirmationService` 发 confirm SSE 帧并挂起 tool 线程，前端内嵌卡片回调 `POST /api/agent/confirm/{confirmId}`（body `{"approved":bool}`，未知/过期 id 404）才放行。5 分钟超时、无活跃流（`/chat/sync`）、流中断一律按拒绝处理。新增危险 tool 时同样接 `ConfirmationService.awaitApproval`。
 - **Daily Digest**：跨模块功能。逻辑在 axis-service 的 `com.esmile.axis.digest`（RSS 抓取 → 关键词分类 → 写 `inbox_item`，`type=DIGEST`、`readAt=null`，重跑按 `digest_date` 删旧条目，幂等）；REST 入口在 axis-agent 的 `/api/v1/digest/trigger`。Scheduler 按 cron 每天 10/12/14/20/22 点触发。
+- **LLM 可观测性**：chat 模型调用（`ChatGateway` 全部方法 + `AgentService` 的 chat/chatSync/expandPrd）由 `LlmCallLogger`（`llm/` 包）异步记录 feature/model/token/耗时/成败到 `llm_call_log` 表，并出 Micrometer 指标（业务层 `llm.*` + 模型层 Spring AI 内建 `gen_ai.*`，后者靠 `AiConfigService.buildClient` 传入 `ObservationRegistry` 激活）；`/actuator/metrics` 已暴露。新增 LLM 调用点必须传 `LlmFeature`（`LlmOptions` 强制字段）。用量聚合：`GET /api/v1/llm/usage`（`LlmUsageService.summarize` 纯函数），Settings 页有用量面板；成本按 `ModelPricing` 刊例价估算，未知模型为 null。
 
 ## 数据模型
 

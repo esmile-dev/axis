@@ -2,6 +2,7 @@ package com.esmile.axis.knowledge.search;
 
 import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.config.ChatGateway.LlmOptions;
+import com.esmile.axis.llm.LlmFeature;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,7 +44,7 @@ public class LlmKnowledgeReranker implements KnowledgeReranker {
         }
         try {
             RerankJson out = chatGateway.callEntity(buildPrompt(query, candidates), RerankJson.class,
-                    new LlmOptions(Duration.ofSeconds(30), null));
+                    new LlmOptions(Duration.ofSeconds(30), null, LlmFeature.RERANK));
             if (out.order() == null) {
                 throw new IllegalStateException("rerank output missing order");
             }

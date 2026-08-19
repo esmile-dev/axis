@@ -2,6 +2,7 @@ package com.esmile.axis.service;
 
 import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.config.ChatGateway.LlmOptions;
+import com.esmile.axis.llm.LlmFeature;
 import com.esmile.axis.entity.ChatConversation;
 import com.esmile.axis.entity.ChatLongMemory;
 import com.esmile.axis.entity.ChatMessage;
@@ -107,7 +108,7 @@ public class ChatHistoryService {
 
                         用户消息：%s
                         """, firstMessage),
-                LlmOptions.DEFAULT);
+                new LlmOptions(LlmFeature.TITLE_GEN));
         return sanitizeTitle(raw);
     }
 

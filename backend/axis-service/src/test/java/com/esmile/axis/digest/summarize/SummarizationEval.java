@@ -2,6 +2,7 @@ package com.esmile.axis.digest.summarize;
 
 import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.config.ChatGateway;
+import com.esmile.axis.llm.LlmCallLogger;
 import com.esmile.axis.digest.classify.DigestCategory;
 import com.esmile.axis.digest.fetch.Article;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -77,7 +78,7 @@ class SummarizationEval {
         when(cacheRepo.findByLink(any())).thenReturn(Optional.empty());
 
         service = new SummarizationService(
-                new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class)), cacheRepo);
+                new ChatGateway(aiConfigService, Mockito.mock(ChatMemory.class), Mockito.mock(LlmCallLogger.class)), cacheRepo);
     }
 
     @Test

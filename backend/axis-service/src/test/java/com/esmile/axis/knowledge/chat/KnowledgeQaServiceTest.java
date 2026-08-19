@@ -2,6 +2,9 @@ package com.esmile.axis.knowledge.chat;
 
 import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.config.ChatGateway.LlmOptions;
+import com.esmile.axis.llm.LlmFeature;
+
+import java.time.Duration;
 import com.esmile.axis.knowledge.ArtifactKind;
 import com.esmile.axis.knowledge.KnowledgeType;
 import com.esmile.axis.knowledge.entity.KnowledgeArtifact;
@@ -77,7 +80,8 @@ class KnowledgeQaServiceTest {
         ArgumentCaptor<String> systemPrompt = ArgumentCaptor.forClass(String.class);
         verify(chatGateway).stream(systemPrompt.capture(), any(String.class), optionsCaptor.capture());
         assertThat(optionsCaptor.getValue().memoryConversationId()).isEqualTo("knowledge-i1");
-        assertThat(optionsCaptor.getValue().timeout()).isEqualTo(LlmOptions.DEFAULT.timeout());
+        assertThat(optionsCaptor.getValue().timeout()).isEqualTo(Duration.ofSeconds(60));
+        assertThat(optionsCaptor.getValue().feature()).isEqualTo(LlmFeature.KNOWLEDGE_QA);
 
         // system prompt 注入标题/总结/原文
         assertThat(systemPrompt.getValue())

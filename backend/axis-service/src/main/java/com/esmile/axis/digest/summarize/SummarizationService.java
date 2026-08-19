@@ -2,6 +2,7 @@ package com.esmile.axis.digest.summarize;
 
 import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.config.ChatGateway.LlmOptions;
+import com.esmile.axis.llm.LlmFeature;
 import com.esmile.axis.digest.classify.DigestCategory;
 import com.esmile.axis.digest.fetch.Article;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -181,7 +182,7 @@ public class SummarizationService {
     // ---------- internals ----------
 
     private <T> T callLlm(String prompt, Class<T> type) {
-        return chatGateway.callEntity(prompt, type, new LlmOptions(Duration.ofSeconds(30), null));
+        return chatGateway.callEntity(prompt, type, new LlmOptions(Duration.ofSeconds(30), null, LlmFeature.DIGEST_SUMMARY));
     }
 
     private ArticleSummary fromCache(Article article, ArticleSummaryCache c) {

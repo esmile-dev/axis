@@ -2,6 +2,7 @@ package com.esmile.axis.knowledge.chat;
 
 import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.config.ChatGateway.LlmOptions;
+import com.esmile.axis.llm.LlmFeature;
 import com.esmile.axis.knowledge.entity.KnowledgeItem;
 import com.esmile.axis.knowledge.repository.KnowledgeItemRepository;
 import com.esmile.axis.knowledge.search.KnowledgeSearchHit;
@@ -72,7 +73,7 @@ public class KnowledgeAskService {
         Flux<String> answer = chatGateway.stream(
                 KnowledgeAskPrompts.askSystemPrompt(assembled.toString().strip()),
                 question,
-                LlmOptions.DEFAULT);
+                new LlmOptions(LlmFeature.KNOWLEDGE_ASK));
         return new AskResult(List.copyOf(sources), answer);
     }
 }

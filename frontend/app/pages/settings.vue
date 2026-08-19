@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import {
   Save, Key, Eye, EyeOff, CheckCircle, RefreshCw, Plug,
-  Plus, Pencil, Trash2, Power, Loader2, MessageSquare, ScanSearch
+  Plus, Pencil, Trash2, Power, Loader2, MessageSquare, ScanSearch, BarChart3
 } from 'lucide-vue-next'
 import {
   Dialog,
@@ -35,9 +35,46 @@ interface ProfileForm {
   type: ProfileType
 }
 
+interface WindowUsage {
+  calls: number
+  errors: number
+  promptTokens: number
+  completionTokens: number
+  avgDurationMs: number
+  costUsd: number | null
+}
+
+interface FeatureUsage {
+  feature: string
+  calls: number
+  promptTokens: number
+  completionTokens: number
+  avgDurationMs: number
+  costUsd: number | null
+}
+
+interface UsageView {
+  today: WindowUsage
+  last7Days: WindowUsage
+  last30Days: WindowUsage
+  byFeature: FeatureUsage[]
+}
+
+const FEATURE_LABELS: Record<string, string> = {
+  AGENT_CHAT: 'Agent 对话',
+  PRD_EXPAND: 'PRD 扩写',
+  KNOWLEDGE_QA: '知识问答（引用）',
+  KNOWLEDGE_ASK: '知识库问答',
+  RERANK: '检索重排',
+  DIGEST_SUMMARY: 'Digest 总结',
+  TITLE_GEN: '会话标题生成',
+  ARTIFACT_GEN: '知识摘要生成'
+}
+
 const api = useApi()
 
 const profiles = ref<AiProfile[]>([])
+const usage = ref<UsageView | null>(null)
 const activeChatProfile = computed(() => profiles.value.find(p => p.isActive && p.type === 'CHAT'))
 const sourceLabel = computed(() => activeChatProfile.value ? '数据库' : '环境变量')
 
@@ -82,7 +119,32 @@ const currentSection = computed(() => sections.find(s => s.type === form.type)!)
 
 onMounted(() => {
   loadProfiles()
+  loadUsage()
 })
+
+async function loadUsage() {
+  try {
+    usage.value = await api<UsageView>('/api/v1/llm/usage')
+  } catch (error) {
+    console.error('Failed to load LLM usage:', error)
+  }
+}
+
+function featureLabel(feature: string) {
+  return FEATURE_LABELS[feature] ?? feature
+}
+
+function formatTokens(n: number) {
+  return n >= 10000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+}
+
+function formatCost(cost: number | null) {
+  return cost == null ? '—' : `$${cost.toFixed(4)}`
+}
+
+function formatDuration(ms: number) {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`
+}
 
 async function loadProfiles() {
   try {
@@ -319,6 +381,64 @@ function maskKey(key: string) {
           <div v-if="profilesOf(section.type).length === 0" class="text-center py-12 text-muted-foreground border border-dashed border-border rounded-2xl">
             {{ section.emptyHint }}，点击右上角 Add Config 添加。
           </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <BarChart3 class="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 class="font-semibold">LLM 用量</h2>
+            <p class="text-sm text-muted-foreground">
+              调用次数 / token / 成本估算（仅已知刊例价模型计入成本，"—" 表示无已知模型调用）
+            </p>
+          </div>
+        </div>
+
+        <div v-if="usage" class="space-y-4">
+          <div class="grid grid-cols-3 gap-4">
+            <div
+              v-for="w in [
+                { label: '今天', data: usage.today },
+                { label: '近 7 天', data: usage.last7Days },
+                { label: '近 30 天', data: usage.last30Days }
+              ]"
+              :key="w.label"
+              class="bg-card border border-border rounded-2xl p-5"
+            >
+              <p class="text-sm text-muted-foreground mb-2">{{ w.label }}</p>
+              <p class="text-2xl font-semibold">{{ formatCost(w.data.costUsd) }}</p>
+              <p class="text-xs text-muted-foreground mt-2">
+                {{ w.data.calls }} 次调用
+                <template v-if="w.data.errors > 0"> · <span class="text-red-500">{{ w.data.errors }} 失败</span></template>
+              </p>
+              <p class="text-xs text-muted-foreground">
+                {{ formatTokens(w.data.promptTokens) }} 入 / {{ formatTokens(w.data.completionTokens) }} 出
+              </p>
+            </div>
+          </div>
+
+          <div v-if="usage.byFeature.length > 0" class="bg-card border border-border rounded-2xl p-5">
+            <p class="text-sm font-medium mb-3">按功能（近 30 天）</p>
+            <div class="space-y-2">
+              <div
+                v-for="f in usage.byFeature"
+                :key="f.feature"
+                class="flex items-center justify-between text-sm"
+              >
+                <span>{{ featureLabel(f.feature) }}</span>
+                <span class="text-muted-foreground">
+                  {{ f.calls }} 次 · {{ formatTokens(f.promptTokens + f.completionTokens) }} tokens ·
+                  均 {{ formatDuration(f.avgDurationMs) }} · {{ formatCost(f.costUsd) }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="text-center py-12 text-muted-foreground border border-dashed border-border rounded-2xl">
+          暂无用量数据
         </div>
       </section>
     </div>

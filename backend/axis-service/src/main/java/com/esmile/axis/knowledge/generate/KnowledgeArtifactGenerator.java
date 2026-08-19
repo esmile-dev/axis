@@ -3,6 +3,7 @@ package com.esmile.axis.knowledge.generate;
 import com.esmile.axis.config.AiConfigService;
 import com.esmile.axis.config.ChatGateway;
 import com.esmile.axis.config.ChatGateway.LlmOptions;
+import com.esmile.axis.llm.LlmFeature;
 import com.esmile.axis.knowledge.ArtifactKind;
 import com.esmile.axis.knowledge.ArtifactStatus;
 import com.esmile.axis.knowledge.entity.KnowledgeArtifact;
@@ -94,7 +95,7 @@ public class KnowledgeArtifactGenerator {
     }
 
     private String callLlm(String prompt) {
-        return chatGateway.call(prompt, LlmOptions.DEFAULT);
+        return chatGateway.call(prompt, new LlmOptions(LlmFeature.ARTIFACT_GEN));
     }
 
     /** Reload before writing so a concurrent update to the other artifact status is not clobbered. */
