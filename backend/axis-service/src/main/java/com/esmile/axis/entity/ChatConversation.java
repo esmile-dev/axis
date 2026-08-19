@@ -22,6 +22,10 @@ public class ChatConversation {
     @Column(nullable = false)
     private String title;
 
+    /** 早期对话的滚动摘要（超窗消息的压缩产物），由 ConversationSummaryService 维护；null 表示从未压缩 */
+    @Column(columnDefinition = "TEXT")
+    private String summary;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

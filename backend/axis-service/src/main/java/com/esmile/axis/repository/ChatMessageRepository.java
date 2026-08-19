@@ -12,5 +12,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, String
 
     Optional<ChatMessage> findTopByConversationIdAndRoleOrderBySeqDesc(String conversationId, String role);
 
+    long countByConversationId(String conversationId);
+
     long deleteByConversationId(String conversationId);
 }

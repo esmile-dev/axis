@@ -20,5 +20,7 @@ public enum LlmFeature {
     /** 会话标题生成 */
     TITLE_GEN,
     /** 知识条目摘要 artifact 生成 */
-    ARTIFACT_GEN
+    ARTIFACT_GEN,
+    /** 会话记忆滚动压缩 */
+    MEMORY_COMPRESS
 }

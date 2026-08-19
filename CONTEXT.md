@@ -50,7 +50,7 @@ _Avoid_: 出处、参考文献
 ## AI Agent
 
 **Conversation（会话）**:
-/chat 页一次连续对话的上下文，id 由前端生成。短期记忆是会话内消息的滑动窗口（只存 USER/ASSISTANT）。
+/chat 页一次连续对话的上下文，id 由前端生成。短期记忆是会话内消息的滑动窗口（只存 USER/ASSISTANT）；超窗消息由 LLM 滚动压缩为会话摘要（存 `chat_conversation.summary`），随 system prompt 注入。
 
 **Long Memory（长期记忆）**:
 Agent 判断有价值后主动保存的跨会话事实，每次请求注入 system prompt（上限 50 条）。与短期记忆是两套独立机制。

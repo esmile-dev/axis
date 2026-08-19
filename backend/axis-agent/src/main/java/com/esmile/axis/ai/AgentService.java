@@ -10,6 +10,7 @@ import com.esmile.axis.llm.LlmCallLogger;
 import com.esmile.axis.llm.LlmCallTracker;
 import com.esmile.axis.llm.LlmFeature;
 import com.esmile.axis.service.ChatHistoryService;
+import com.esmile.axis.service.ConversationSummaryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -41,6 +42,7 @@ public class AgentService {
     private final ToolCallNotifier toolCallNotifier;
     private final ConfirmationService confirmationService;
     private final ChatHistoryService chatHistoryService;
+    private final ConversationSummaryService conversationSummaryService;
     private final LlmCallLogger llmCallLogger;
 
     public Flux<ChatEvent> chat(String message, String sessionId) {
@@ -56,12 +58,14 @@ public class AgentService {
         if (retry) {
             chatHistoryService.removeLastUserMessageIfMatches(sessionId, message);
         }
+        // 超窗预压缩：最旧一批进会话摘要（失败静默退化为硬截断），需在 advisor 落 user 消息前执行
+        conversationSummaryService.compressIfNeeded(sessionId);
         boolean newConversation = !chatHistoryService.conversationExists(sessionId);
         Sinks.Many<ChatEvent> toolEvents = toolCallNotifier.begin();
 
         LlmCallTracker tracker = llmCallLogger.start(LlmFeature.AGENT_CHAT);
         Flux<ChatEvent> tokenFlux = chatClient().prompt()
-                .system(systemPrompt())
+                .system(systemPrompt(sessionId))
                 .user(message)
                 .advisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, sessionId))
@@ -96,12 +100,13 @@ public class AgentService {
 
     /** 非流式对话：与 {@link #chat} 同一套编排，改走 {@code .call()} */
     public String chatSync(String message, String sessionId) {
+        conversationSummaryService.compressIfNeeded(sessionId);
         boolean newConversation = !chatHistoryService.conversationExists(sessionId);
         LlmCallTracker tracker = llmCallLogger.start(LlmFeature.AGENT_CHAT);
         String content;
         try {
             ChatResponse response = chatClient().prompt()
-                    .system(systemPrompt())
+                    .system(systemPrompt(sessionId))
                     .user(message)
                     .advisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                     .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, sessionId))
@@ -149,8 +154,8 @@ public class AgentService {
                 .doOnError(tracker::error);
     }
 
-    /** 基础 prompt + 注入长期记忆（最多 50 条） */
-    private String systemPrompt() {
+    /** 基础 prompt + 注入长期记忆（最多 50 条）+ 该会话早期对话的滚动摘要（有则注入） */
+    private String systemPrompt(String sessionId) {
         String base = """
                 你是 AI Station 的智能助手。你可以帮助用户管理他们的个人工作站，包括：
                 - Inbox（灵感回收站）：快速记录碎片想法
@@ -167,7 +172,10 @@ public class AgentService {
         String memories = chatHistoryService.listMemories().stream()
                 .map(m -> "- " + m.getContent())
                 .collect(Collectors.joining("\n"));
-        return memories.isBlank() ? base : base + "\n以下是你已记住的长期记忆：\n" + memories;
+        String prompt = memories.isBlank() ? base : base + "\n以下是你已记住的长期记忆：\n" + memories;
+        return conversationSummaryService.findSummary(sessionId)
+                .map(summary -> prompt + "\n以下是本次会话早期对话的摘要（仅供参考，近期完整对话见上下文）：\n" + summary)
+                .orElse(prompt);
     }
 
     private ChatClient chatClient() {

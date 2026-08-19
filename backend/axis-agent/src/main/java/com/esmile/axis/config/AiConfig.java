@@ -1,5 +1,6 @@
 package com.esmile.axis.config;
 
+import com.esmile.axis.service.ConversationSummaryService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -12,12 +13,14 @@ public class AiConfig {
     /**
      * 短期记忆：按会话（conversationId）隔离的滑动窗口（最近 100 条），
      * 通过 JpaChatMemoryRepository 持久化到 chat_message 表，重启不丢。
+     * 窗口大小与 ConversationSummaryService 共享常量——超窗消息由它预压缩成摘要，
+     * 窗口内部裁剪实际不触发。
      */
     @Bean
     public ChatMemory chatMemory(JpaChatMemoryRepository chatMemoryRepository) {
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(chatMemoryRepository)
-                .maxMessages(100)
+                .maxMessages(ConversationSummaryService.MAX_MESSAGES)
                 .build();
     }
 

@@ -23,7 +23,7 @@
 
 - **前端**：Nuxt 4 + Vue 3 Composition API + TypeScript；Pinia + VueUse 状态管理；Tailwind CSS + Shadcn-Vue（基于 Reka UI）+ Lucide Vue Next 图标；`marked` 渲染 Markdown
 - **后端**：Spring Boot 4.0 + Spring Framework 7.0 + Java 21；Spring Data JPA + Hibernate；Spring AI 2.0（ChatClient + Tool Calling）；Maven 多模块构建
-- **数据库**：PostgreSQL 18 + pgvector 扩展（本地默认 `axis` 库；Flyway 管 schema + `ddl-auto: validate`；开发期改表直接改 `V1__init.sql` 后重建本地库，不写增量迁移脚本；`vector_store` 表由 PgVectorStore 启动时自建）
+- **数据库**：PostgreSQL 18 + pgvector 扩展（本地默认 `axis` 库；Flyway 管 schema + `ddl-auto: validate`；开发期改表优先改 `V1__init.sql` 后重建本地库，本地数据需保留时写增量迁移——现有 `V2__chat_conversation_summary.sql` 先例；`vector_store` 表由 PgVectorStore 启动时自建）
 
 ## 仓库结构
 
@@ -102,7 +102,7 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 - **Local-First（首屏秒开）**：`useLocalFirst.ts` — 页面优先从 LocalStorage 读缓存立即渲染，后台静默同步数据库。所有使用此模式的页面必须调用 `init()` 初始化。
 - **Optimistic UI（乐观更新）**：`useOptimistic.ts` — 操作时前端状态先切换，后端静默同步，失败回滚。配合 `useLocalFirst` 使用。
 - **后端调用约定**：一律走 `useApi()` 的 `$fetch` 实例；流式 SSE 端点（`/api/agent/chat`、`/api/agent/expand`）例外，直接用 `fetch + ReadableStream` 绕过 `$fetch`。
-- **AI 聊天（/chat 页）**：SSE 帧为结构化 JSON——`{"type":"token","text"}` / `{"type":"tool","label"}`（由 `ToolCallNotifier` 注入）/ `{"type":"confirm","confirmId","action","detail"}`（危险操作确认请求，见下）/ `{"type":"error","message"}`（LLM 流失败，由 `AgentService.onErrorResume` 映射，后随 done）/ `{"type":"done"}`。短期记忆经 `JpaChatMemoryRepository` 落 `chat_message` 表（滑动窗口 100 条，仅存 USER/ASSISTANT），会话元数据在 `chat_conversation`（id 由前端 UUID 生成）；长期记忆在 `chat_long_memory` 表，Agent 通过 `MemoryTool` 主动保存，每次请求注入 system prompt（≤50 条）。历史/记忆 REST 在 axis-service 的 `ChatHistoryController`（`/api/agent/conversations*`、`/api/agent/memories*`）。
+- **AI 聊天（/chat 页）**：SSE 帧为结构化 JSON——`{"type":"token","text"}` / `{"type":"tool","label"}`（由 `ToolCallNotifier` 注入）/ `{"type":"confirm","confirmId","action","detail"}`（危险操作确认请求，见下）/ `{"type":"error","message"}`（LLM 流失败，由 `AgentService.onErrorResume` 映射，后随 done）/ `{"type":"done"}`。短期记忆经 `JpaChatMemoryRepository` 落 `chat_message` 表（滑动窗口 100 条，仅存 USER/ASSISTANT；超窗由 `ConversationSummaryService` 预压缩最旧 30 条滚动合并进 `chat_conversation.summary` 并注入 system prompt，失败静默降级硬截断），会话元数据在 `chat_conversation`（id 由前端 UUID 生成）；长期记忆在 `chat_long_memory` 表，Agent 通过 `MemoryTool` 主动保存，每次请求注入 system prompt（≤50 条）。历史/记忆 REST 在 axis-service 的 `ChatHistoryController`（`/api/agent/conversations*`、`/api/agent/memories*`）。
 - **危险操作人工确认（confirmation gate）**：删除类 tool（`deleteIssue`/`deleteInboxItem`/`deleteMemory`）不直接执行——经 `ConfirmationService` 发 confirm SSE 帧并挂起 tool 线程，前端内嵌卡片回调 `POST /api/agent/confirm/{confirmId}`（body `{"approved":bool}`，未知/过期 id 404）才放行。5 分钟超时、无活跃流（`/chat/sync`）、流中断一律按拒绝处理。新增危险 tool 时同样接 `ConfirmationService.awaitApproval`。
 - **Daily Digest**：跨模块功能。逻辑在 axis-service 的 `com.esmile.axis.digest`（RSS 抓取 → 关键词分类 → 写 `inbox_item`，`type=DIGEST`、`readAt=null`，重跑按 `digest_date` 删旧条目，幂等）；REST 入口在 axis-agent 的 `/api/v1/digest/trigger`。Scheduler 按 cron 每天 10/12/14/20/22 点触发。
 - **LLM 可观测性**：chat 模型调用（`ChatGateway` 全部方法 + `AgentService` 的 chat/chatSync/expandPrd）由 `LlmCallLogger`（`llm/` 包）异步记录 feature/model/token/耗时/成败到 `llm_call_log` 表，并出 Micrometer 指标（业务层 `llm.*` + 模型层 Spring AI 内建 `gen_ai.*`，后者靠 `AiConfigService.buildClient` 传入 `ObservationRegistry` 激活）；`/actuator/metrics` 已暴露。新增 LLM 调用点必须传 `LlmFeature`（`LlmOptions` 强制字段）。用量聚合：`GET /api/v1/llm/usage`（`LlmUsageService.summarize` 纯函数），Settings 页有用量面板；成本按 `ModelPricing` 刊例价估算，未知模型为 null。

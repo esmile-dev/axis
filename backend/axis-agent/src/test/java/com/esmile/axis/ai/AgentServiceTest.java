@@ -10,6 +10,7 @@ import com.esmile.axis.llm.LlmCallLogger;
 import com.esmile.axis.llm.LlmCallTracker;
 import com.esmile.axis.llm.LlmFeature;
 import com.esmile.axis.service.ChatHistoryService;
+import com.esmile.axis.service.ConversationSummaryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,11 +28,13 @@ import org.springframework.ai.chat.model.Generation;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -64,6 +67,8 @@ class AgentServiceTest {
     @Mock
     private ChatHistoryService chatHistoryService;
     @Mock
+    private ConversationSummaryService conversationSummaryService;
+    @Mock
     private LlmCallLogger llmCallLogger;
     @Mock
     private LlmCallTracker tracker;
@@ -80,8 +85,9 @@ class AgentServiceTest {
     void setUp() {
         service = new AgentService(aiConfigService, chatMemory, inboxTool, issueTool, projectTool,
                 knowledgeTool, memoryTool, new ToolCallNotifier(), confirmationService, chatHistoryService,
-                llmCallLogger);
+                conversationSummaryService, llmCallLogger);
         lenient().when(llmCallLogger.start(any())).thenReturn(tracker);
+        lenient().when(conversationSummaryService.findSummary(anyString())).thenReturn(Optional.empty());
     }
 
     private static ChatResponse resp(String text, Usage usage) {
@@ -168,5 +174,25 @@ class AgentServiceTest {
 
         verify(tracker).error(boom);
         verify(tracker, never()).success();
+    }
+
+    @Test
+    void chat_anyRequest_triggersCompressionCheckBeforeStreaming() {
+        stubChatChain(Flux.just(resp("答", null)));
+
+        service.chat("问题", "s1").collectList().block();
+
+        // advisor 在流式开始前就落 user 消息，压缩检查必须先发生
+        verify(conversationSummaryService).compressIfNeeded("s1");
+    }
+
+    @Test
+    void chat_summaryPresent_injectedIntoSystemPrompt() {
+        when(conversationSummaryService.findSummary("s1")).thenReturn(Optional.of("早期摘要：用户调研过 RAG"));
+        stubChatChain(Flux.just(resp("答", null)));
+
+        service.chat("问题", "s1").collectList().block();
+
+        verify(spec).system(argThat((String s) -> s.contains("早期摘要：用户调研过 RAG")));
     }
 }
