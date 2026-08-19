@@ -117,6 +117,21 @@
 
 ---
 
+## 9. LLM 可观测性：调用日志 + Token 成本追踪
+
+**简历写法**：为全部 LLM 调用建立三层可观测体系——`llm_call_log` 事实日志（feature/model/token/耗时/成败，异步落库不阻塞主链路）、用量聚合 API + 设置页成本面板、Micrometer 双层指标（业务层 `llm.calls{feature,model,status}` + Spring AI 内建模型层 `gen_ai.*`）；业务来源维度（Agent 对话/RAG/rerank/Digest 等 8 类）作为调用选项的强制字段，编译期保证每个新调用点都必须标注。
+
+**背后技术**：
+- **流式 usage 捕获**：读 Spring AI 源码确认 OpenAI 流式默认 `include_usage(true)`、usage 只在末帧且该帧无内容——gateway 从 `.content()` 改为 `.chatResponse()` 流内部 tap 末帧 usage、滤掉空帧，对调用方保持 `Flux<String>` 签名不变。
+- **观测分层语义**：tool calling 一轮消息多次内部模型往返，业务日志按"一次用户消息"记一条，逐次模型调用由 `gen_ai.*` 内建观测精确覆盖——两层互补而非重复，实测 token 总和交叉吻合。
+- **不拖垮主链路**：`@Async` 单线程有界队列（满则 DiscardPolicy）+ catch-all 静默；流式 `doOnError` 置于 `onErrorResume` 之前否则错误帧吞掉后记录丢失。
+- **成本估算的诚实语义**：内置刊例价表（最长前缀匹配带日期的模型别名），未知模型不计入、窗口无已知模型返回 null 而非 0。
+- 为此把 `ChatGateway` 的 LlmOptions 从静态 DEFAULT 改为强制 feature 参数——"新调用点不标注业务来源就编译不过"。
+
+**面试官深挖**：流式中途取消为什么没有日志（cancel 既非 complete 也非 error，如实不记）；为什么要手工管理模型构造（热切换，见 #6）以及由此带来的观测注册表传递成本；成本面板和生产级 FinOps（OpenRouter/LiteLLM 网关、按用户分摊）的差距。
+
+---
+
 ## 已知局限清单（面试时主动暴露，掌握节奏）
 
 1. **单用户假设**：`ToolCallNotifier` 用全局 `AtomicReference` 持有当前 sink，不支持并发对话；生产化需换 request-scoped 上下文。

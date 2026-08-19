@@ -4,8 +4,8 @@
 
 ## 文件索引
 
-- [existing-features.md](./existing-features.md)：项目中**已有**的可包装 feature（8 个），每个附简历写法、背后技术、面试官深挖点
-- [feature-roadmap.md](./feature-roadmap.md)：建议**补充**的 feature（P0/P1/P2 排序），附学习内容、实现要点、工作量，可勾选跟踪。**P0 四项已全部完成**（混合检索 / RAG 引用问答 / structured output / 确认门），当前推进 P1
+- [existing-features.md](./existing-features.md)：项目中**已有**的可包装 feature（9 个），每个附简历写法、背后技术、面试官深挖点
+- [feature-roadmap.md](./feature-roadmap.md)：建议**补充**的 feature（P0/P1/P2 排序），附学习内容、实现要点、工作量，可勾选跟踪。**P0 四项已全部完成**（混合检索 / RAG 引用问答 / structured output / 确认门）；P1 已完成 #5 可观测性、#7 SSE 健壮性、#8 向量一致性，剩 #6 上下文压缩
 - [interview-prep.md](./interview-prep.md)：学习路线图 + 面试叙事建议
 
 ## 项目定位（简历项目描述）

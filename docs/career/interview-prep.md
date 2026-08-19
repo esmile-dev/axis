@@ -4,12 +4,12 @@
 
 ```
 已完成：  #3 Structured Output + #1 混合检索 rerank + #2 RAG 问答 citation + #4 Human-in-the-loop
-           → P0 全收官；#7 部分完成（AbortController + 停止按钮已落地）
-第 1 步：  #8 向量一致性 (S, 半天) + #7 收尾 error 帧 / aiExpand decoder (S, 半天)
-           → 清掉自己暴露过的坑，"发现即修复"叙事闭环
-第 2 步：  #5 可观测性 (S~M, 1~2 天)
-           → 生产化板块最后的弱答案；LLM 调用已收口 ChatGateway 单点，拦截成本低
-第 3 步：  #6 上下文压缩 (M, 2~3 天)
+           → P0 全收官
+           #8 向量一致性 + #7 SSE 健壮性（error 帧 / 手动重试 / aiExpand decoder）
+           → "发现即修复"叙事闭环
+           #5 可观测性（L0 llm_call_log + L1 用量面板 + L2 双层指标）
+           → 生产化板块弱答案补齐；三层 + 流式末帧 usage 是现成深挖素材
+第 1 步：  #6 上下文压缩 (M, 2~3 天)
            → "长对话上下文超限" 从弱答案变完整答案（窗口 → 摘要压缩）
 之后按余力：#9 MCP → #10 LLM-as-judge → #11 reindex 任务化
 ```

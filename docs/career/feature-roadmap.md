@@ -66,7 +66,7 @@
 
 ### 5. LLM 可观测性：调用日志 + Token 成本追踪
 
-- [ ] 状态：未开始
+- [x] 状态：已完成（2026-08-17）。三层全落地：L0 `llm_call_log` 事实表 + `LlmCallLogger`（@Async 单线程有界队列、静默失败）统一记录点，`ChatGateway`（call/callEntity/stream）与 `AgentService`（chat/chatSync/expandPrd）全接入，`LlmFeature` 枚举为 `LlmOptions` 强制字段（编译期逼每个调用点标注业务来源）；L1 `GET /api/v1/llm/usage`（`summarize` 纯函数聚合 today/7d/30d + byFeature）+ Settings 用量面板；L2 自定义指标（`llm.calls`/`llm.call.duration`/`llm.tokens`）+ 手动构造的 `OpenAiChatModel` 挂上 `ObservationRegistry` 激活 Spring AI 内建 `gen_ai.*` 模型层观测。实测交叉验证：一次 agent 对话落两行日志（AGENT_CHAT + 新会话 TITLE_GEN），token 总和与 `gen_ai.client.token.usage` 吻合。规格：`docs/feature/llm-observability/lite-spec.md`
 
 **为什么**：生产级 LLM 应用必做。已有 `llm_call_count` 雏形，扩展成完整体系。面试官问"线上怎么知道 LLM 花了多少钱、慢在哪"，这是标准答案。
 
