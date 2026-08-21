@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, GripVertical, Sparkles, Cloud, CloudOff, ArrowLeft, Bug, Lightbulb, Wrench, AlertCircle, Circle, CircleDot, CircleCheck, CircleX } from 'lucide-vue-next'
+import { Plus, GripVertical, Sparkles, Cloud, CloudOff, ArrowLeft, Bug, Lightbulb, Wrench, AlertCircle, Circle, CircleDot, CircleCheck, CircleX, FolderGit2 } from 'lucide-vue-next'
 import IssueCreator from '@/components/IssueCreator.vue'
 
 type IssueStatus = 'TODO' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED'
@@ -11,6 +11,7 @@ interface Project {
   id: string
   name: string
   description: string | null
+  repoPath: string | null
   status: ProjectStatus
   order: number
   createdAt: string
@@ -234,10 +235,64 @@ async function aiExpand(issue: Issue) {
   }
 }
 
+const nameInput = ref('')
+const repoPathInput = ref('')
+
+function blurActive(event: KeyboardEvent) {
+  (event.target as HTMLInputElement).blur()
+}
+
+function cancelNameEdit(event: KeyboardEvent) {
+  nameInput.value = project.value?.name ?? ''
+  blurActive(event)
+}
+
+async function saveName() {
+  if (!project.value) return
+  const value = nameInput.value.trim()
+  if (!value || value === project.value.name) {
+    nameInput.value = project.value.name
+    return
+  }
+  try {
+    const updated = await api<Project>(`/api/projects/${projectId}`, {
+      method: 'PATCH',
+      body: { name: value }
+    })
+    project.value.name = updated.name
+  } catch (e) {
+    console.error('Failed to rename project', e)
+    nameInput.value = project.value.name
+  }
+}
+
+function cancelRepoPathEdit(event: KeyboardEvent) {
+  repoPathInput.value = project.value?.repoPath ?? ''
+  blurActive(event)
+}
+
+async function saveRepoPath() {
+  if (!project.value) return
+  const value = repoPathInput.value.trim()
+  if (value === (project.value.repoPath ?? '')) return
+  try {
+    const updated = await api<Project>(`/api/projects/${projectId}`, {
+      method: 'PATCH',
+      body: { repoPath: value }
+    })
+    project.value.repoPath = updated.repoPath
+  } catch (e) {
+    console.error('Failed to save repo path', e)
+    repoPathInput.value = project.value.repoPath ?? ''
+  }
+}
+
 async function loadProject() {
   try {
     const projects = await api<Project[]>('/api/projects')
     project.value = projects.find(p => p.id === projectId) || null
+    nameInput.value = project.value?.name ?? ''
+    repoPathInput.value = project.value?.repoPath ?? ''
   } catch (e) {
     console.error('Failed to load project', e)
   }
@@ -260,8 +315,28 @@ onMounted(async () => {
           <ArrowLeft class="w-5 h-5" />
         </NuxtLink>
         <div>
-          <h1 class="text-3xl font-bold tracking-tight">{{ project?.name || 'Loading...' }}</h1>
+          <input
+            v-model="nameInput"
+            @keydown.enter="blurActive"
+            @keydown.esc="cancelNameEdit"
+            @blur="saveName"
+            type="text"
+            placeholder="Project name"
+            class="text-3xl font-bold tracking-tight bg-transparent border-none focus:ring-0 focus:outline-none p-0 w-full placeholder:text-muted-foreground/50"
+          />
           <p v-if="project?.description" class="text-muted-foreground">{{ project.description }}</p>
+          <div v-if="project" class="flex items-center gap-1.5 mt-1">
+            <FolderGit2 class="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <input
+              v-model="repoPathInput"
+              @keydown.enter="blurActive"
+              @keydown.esc="cancelRepoPathEdit"
+              @blur="saveRepoPath"
+              type="text"
+              placeholder="Local repo path (for agent dispatch)"
+              class="bg-transparent border-none text-xs text-muted-foreground focus:text-foreground focus:ring-0 focus:outline-none p-0 placeholder:text-muted-foreground/50 w-80"
+            />
+          </div>
         </div>
       </div>
       <div class="flex items-center gap-4">

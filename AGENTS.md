@@ -42,7 +42,7 @@ backend/                         # Maven 多模块（父 POM packaging=pom，无
 ├── inbox/                       # Daily Digest 输出目录（daily-YYYY-MM-DD.md）
 ├── axis-service/                # 业务核心模块（jar，无主类，不可独立启动）
 │   └── src/main/java/com/esmile/axis/
-│       ├── controller/          # REST API：Inbox/Project/Issue/Knowledge/ChatHistory/Config/FileUpload/Health
+│       ├── controller/          # REST API：Inbox/Project/Issue/Knowledge/Dispatch/ChatHistory/Config/FileUpload/Health
 │       ├── service/  repository/  entity/  enums/
 │       ├── digest/              # Daily Digest：fetch / classify / summarize / scheduler / service
 │       ├── llm/                 # LLM 可观测性：llm_call_log 事实日志 + 用量聚合 + Micrometer 指标
@@ -106,6 +106,7 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 - **危险操作人工确认（confirmation gate）**：删除类 tool（`deleteIssue`/`deleteInboxItem`/`deleteMemory`）不直接执行——经 `ConfirmationService` 发 confirm SSE 帧并挂起 tool 线程，前端内嵌卡片回调 `POST /api/agent/confirm/{confirmId}`（body `{"approved":bool}`，未知/过期 id 404）才放行。5 分钟超时、无活跃流（`/chat/sync`）、流中断一律按拒绝处理。新增危险 tool 时同样接 `ConfirmationService.awaitApproval`。
 - **Daily Digest**：跨模块功能。逻辑在 axis-service 的 `com.esmile.axis.digest`（RSS 抓取 → 关键词分类 → 写 `inbox_item`，`type=DIGEST`、`readAt=null`，重跑按 `digest_date` 删旧条目，幂等）；REST 入口在 axis-agent 的 `/api/v1/digest/trigger`。Scheduler 按 cron 每天 10/12/14/20/22 点触发。
 - **LLM 可观测性**：chat 模型调用（`ChatGateway` 全部方法 + `AgentService` 的 chat/chatSync/expandPrd）由 `LlmCallLogger`（`llm/` 包）异步记录 feature/model/token/耗时/成败到 `llm_call_log` 表，并出 Micrometer 指标（业务层 `llm.*` + 模型层 Spring AI 内建 `gen_ai.*`，后者靠 `AiConfigService.buildClient` 传入 `ObservationRegistry` 激活）；`/actuator/metrics` 已暴露。新增 LLM 调用点必须传 `LlmFeature`（`LlmOptions` 强制字段）。用量聚合：`GET /api/v1/llm/usage`（`LlmUsageService.summarize` 纯函数），Settings 页有用量面板；成本按 `ModelPricing` 刊例价估算，未知模型为 null。
+- **Agent Dispatch（派 Issue 给本地 coding agent）**：Phase 0 启动器交接——`POST /api/issues/{id}/dispatch` 校验所属 Project `repo_path`（V3 迁移新增列，可空=无派发入口）后，`dispatch/TerminalLauncher` 生成 .command 临时脚本（quoted heredoc 注入 prompt）在本机终端打开交互式 Claude Code（prompt 为启动参数即自动提交，派发弹窗审查=确认闸门）。终端应用由 Settings 页"终端"偏好决定（localStorage 存储，前端随请求传 `terminal` 参数，默认 TERMINAL）：TERMINAL 经 `open -a Terminal` 直跑脚本；WARP 走 Tab Config TOML（`~/.warp/tab_configs/`，terminal pane `commands` 复用同一脚本）+ `warp://tab_config/<name>` URI（Warp 无 AppleScript/CLI 接口；已有窗口时在其中开新 tab，无窗口才新开窗口）。Axis 不编排 agent，交互/审批/急停全在终端。分期计划（Phase 1 MCP 回写、Phase 2 编排候选）见 `.scratch/agent-dispatch/plan.md`。
 
 ## 数据模型
 

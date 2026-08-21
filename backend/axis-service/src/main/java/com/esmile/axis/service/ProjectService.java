@@ -42,12 +42,13 @@ public class ProjectService {
     }
 
     @Transactional
-    public Project update(String id, String name, String description, String status, Integer order) {
+    public Project update(String id, String name, String description, String status, Integer order, String repoPath) {
         Project project = findById(id);
         if (name != null) project.setName(name);
         if (description != null) project.setDescription(description);
         if (status != null) project.setStatus(ProjectStatus.valueOf(status));
         if (order != null) project.setOrder(order);
+        if (repoPath != null) project.setRepoPath(repoPath.isBlank() ? null : repoPath.trim());
         return repository.save(project);
     }
 

@@ -47,7 +47,7 @@ public class ProjectTool {
             @ToolParam(description = "项目的 ID") String id,
             @ToolParam(description = "新状态：PLANNING/ACTIVE/COMPLETED/ARCHIVED") String status) {
         toolCallNotifier.emit("更新项目状态");
-        projectService.update(id, null, null, status, null);
+        projectService.update(id, null, null, status, null, null);
         return "✅ 项目状态已更新为 " + status;
     }
 }

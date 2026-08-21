@@ -27,6 +27,9 @@ public class Project {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(columnDefinition = "TEXT")
+    private String repoPath;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

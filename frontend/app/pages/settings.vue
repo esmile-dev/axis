@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import {
   Save, Key, Eye, EyeOff, CheckCircle, RefreshCw, Plug,
-  Plus, Pencil, Trash2, Power, Loader2, MessageSquare, ScanSearch, BarChart3
+  Plus, Pencil, Trash2, Power, Loader2, MessageSquare, ScanSearch, BarChart3, Terminal
 } from 'lucide-vue-next'
 import {
   Dialog,
@@ -120,7 +120,20 @@ const currentSection = computed(() => sections.find(s => s.type === form.type)!)
 onMounted(() => {
   loadProfiles()
   loadUsage()
+  preferredTerminal.value = localStorage.getItem('axis-terminal') || 'terminal'
 })
+
+// 终端偏好（agent dispatch）：localStorage 持久化，派发 Issue 时随请求发给后端
+const terminalOptions = [
+  { value: 'terminal', label: 'Terminal.app' },
+  { value: 'warp', label: 'Warp' }
+]
+const preferredTerminal = ref('terminal')
+
+function setTerminal(value: string) {
+  preferredTerminal.value = value
+  localStorage.setItem('axis-terminal', value)
+}
 
 async function loadUsage() {
   try {
@@ -439,6 +452,33 @@ function maskKey(key: string) {
         </div>
         <div v-else class="text-center py-12 text-muted-foreground border border-dashed border-border rounded-2xl">
           暂无用量数据
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Terminal class="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 class="font-semibold">终端</h2>
+            <p class="text-sm text-muted-foreground">派发 Issue 给本地 coding agent 时打开的终端应用</p>
+          </div>
+        </div>
+        <div class="bg-card border border-border rounded-2xl p-5">
+          <div class="flex gap-2">
+            <button
+              v-for="opt in terminalOptions"
+              :key="opt.value"
+              @click="setTerminal(opt.value)"
+              class="px-4 py-2 text-sm rounded-lg border transition-all"
+              :class="preferredTerminal === opt.value
+                ? 'border-primary bg-primary/10 text-foreground'
+                : 'border-border text-muted-foreground hover:border-border/80'"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
         </div>
       </section>
     </div>

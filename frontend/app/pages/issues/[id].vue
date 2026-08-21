@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { X, Send, Trash2, ChevronDown, Paperclip, MessageSquare, ArrowLeft } from 'lucide-vue-next'
+import { X, Send, Trash2, ChevronDown, Paperclip, MessageSquare, ArrowLeft, Terminal } from 'lucide-vue-next'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -187,6 +187,45 @@ async function deleteIssue() {
     isDeleting.value = false
   }
 }
+
+// Dispatch to local coding agent (Terminal + Claude Code)
+const showDispatchDialog = ref(false)
+const dispatchPrompt = ref('')
+const isDispatching = ref(false)
+const dispatchError = ref<string | null>(null)
+const dispatchSuccess = ref(false)
+const dispatchTerminalLabel = ref('Terminal.app')
+
+function openDispatchDialog() {
+  dispatchPrompt.value = issue.value?.description?.trim()
+    ? `${issue.value.title}\n\n${issue.value.description}`
+    : (issue.value?.title || '')
+  dispatchTerminalLabel.value = (localStorage.getItem('axis-terminal') || 'terminal') === 'warp' ? 'Warp' : 'Terminal.app'
+  dispatchError.value = null
+  showDispatchDialog.value = true
+}
+
+async function dispatchToAgent() {
+  if (!issueId.value || isDispatching.value || !dispatchPrompt.value.trim()) return
+  isDispatching.value = true
+  dispatchError.value = null
+  try {
+    await api(`/api/issues/${issueId.value}/dispatch`, {
+      method: 'POST',
+      body: {
+        prompt: dispatchPrompt.value,
+        terminal: localStorage.getItem('axis-terminal') || 'terminal'
+      }
+    })
+    showDispatchDialog.value = false
+    dispatchSuccess.value = true
+    setTimeout(() => { dispatchSuccess.value = false }, 4000)
+  } catch (err: any) {
+    dispatchError.value = err?.data?.detail || err?.data?.message || 'Dispatch failed, check backend logs'
+  } finally {
+    isDispatching.value = false
+  }
+}
 </script>
 
 <template>
@@ -232,6 +271,37 @@ async function deleteIssue() {
           </Button>
           <Button size="sm" class="h-7 bg-red-600 hover:bg-red-700 text-white" :disabled="isDeleting" @click="deleteIssue">
             Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Dispatch to Claude Dialog -->
+    <Dialog v-model:open="showDispatchDialog">
+      <DialogContent class="bg-[#1c1c1e] border-border text-foreground max-w-lg">
+        <DialogHeader>
+          <DialogTitle class="text-base">Dispatch to Claude</DialogTitle>
+          <DialogDescription class="text-sm text-muted-foreground">
+            Claude Code opens in {{ dispatchTerminalLabel }} at <span class="font-mono">{{ currentProject?.repoPath }}</span> with this prompt.
+          </DialogDescription>
+        </DialogHeader>
+        <textarea
+          v-model="dispatchPrompt"
+          rows="10"
+          class="w-full bg-secondary/20 border border-border/40 rounded-lg p-3 text-sm resize-none focus:ring-1 focus:ring-primary focus:outline-none"
+        ></textarea>
+        <p v-if="dispatchError" class="text-xs text-red-400">{{ dispatchError }}</p>
+        <DialogFooter class="flex gap-2 justify-end">
+          <Button variant="outline" size="sm" class="h-7" @click="showDispatchDialog = false">
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            class="h-7 bg-[#5e6ad2] hover:bg-[#4b54a8] text-white"
+            :disabled="isDispatching || !dispatchPrompt.trim()"
+            @click="dispatchToAgent"
+          >
+            {{ isDispatching ? 'Dispatching...' : 'Dispatch' }}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -358,6 +428,18 @@ async function deleteIssue() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Button
+            v-if="currentProject?.repoPath"
+            variant="outline"
+            size="sm"
+            class="h-7 px-2.5 text-xs bg-secondary/20 border-border/40 hover:bg-secondary/40 whitespace-nowrap"
+            @click="openDispatchDialog"
+          >
+            <Terminal class="w-3 h-3 mr-1.5" />
+            Dispatch to Claude
+          </Button>
+          <span v-if="dispatchSuccess" class="text-xs text-green-400">Claude opened in terminal</span>
         </div>
 
         <div class="pt-8 border-t border-border/20">

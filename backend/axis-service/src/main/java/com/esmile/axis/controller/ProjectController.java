@@ -29,7 +29,7 @@ public class ProjectController {
 
     @PatchMapping("/{id}")
     public Project update(@PathVariable String id, @Valid @RequestBody UpdateProjectRequest req) {
-        return projectService.update(id, req.name(), req.description(), req.status(), req.order());
+        return projectService.update(id, req.name(), req.description(), req.status(), req.order(), req.repoPath());
     }
 
     @DeleteMapping("/{id}")
@@ -52,7 +52,8 @@ public class ProjectController {
             String name,
             String description,
             String status,
-            Integer order
+            Integer order,
+            String repoPath
     ) {
     }
 }
