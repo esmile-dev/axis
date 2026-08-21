@@ -1,5 +1,5 @@
 ---
-status: draft            # draft → approved →（Phase 1 完成后）verified
+status: verified         # draft → approved →（Phase 1 完成后）verified
 feature: agent-dispatch
 created: 2026-08-21
 ---
@@ -30,7 +30,7 @@ Axis 今天管的是任务的生命周期（BACKLOG → DONE 靠人拖），执�
 | Phase | 内容 | 工作量 | 状态 |
 |-------|------|--------|------|
 | **0** | 启动器交接：Issue → 终端打开 Claude，携带上下文 | ~1 天 | ✅ 已完成（2026-08-21，spec 已 verified） |
-| **1** | MCP server + 回写闭环（顺带完成 roadmap #9） | ~2~3 天 | 本期 |
+| **1** | MCP server + 回写闭环（顺带完成 roadmap #9） | ~2~3 天（调研后重估：核心编码 ~半天 + prompt 模板调优） | ✅ 已完成（2026-08-21，spec-phase1 已 verified） |
 | 2 | 编排 MVP（spawn headless + 进度进 UI + 执行记录表） | 4~6 天 | 候选，视 0/1 反馈再议 |
 
 ## 4. Phase 0：启动器交接
@@ -66,7 +66,7 @@ Axis 今天管的是任务的生命周期（BACKLOG → DONE 靠人拖），执�
   - `add_issue_comment(id, content)`：完成汇报（改动摘要、跑了什么测试、遗留问题）
   - `transition_issue_status(id, status)`：目标状态限定 `BACKLOG`/`TODO`/`IN_PROGRESS`；`DONE`/`CANCELLED` 经 MCP 不可达
 - 派发 prompt 模板升级：issue 上下文 + 回写指令（完成后 `add_issue_comment` 汇报，可迁 `IN_PROGRESS`）
-- 注册文档：`claude mcp add --scope user` 一次注册，所有仓库可用，不污染目标仓库
+- 注册：`claude mcp add --transport http --scope user axis http://127.0.0.1:7789/mcp`（`mcp-research.md` 本机实测：user scope 全仓库可用、无鉴权 localhost 直连成功、不污染目标仓库）
 - best-effort 语义：agent 不回调不留任何脏状态（Issue 状态本来就没被系统改过）
 
 ### 明确不做
@@ -85,7 +85,7 @@ Axis 今天管的是任务的生命周期（BACKLOG → DONE 靠人拖），执�
 ### 安全
 
 - agent 读 issue 内容 = 潜在不可信内容携带 Axis 写权限：工具面收敛（无删除/无批量）+ 终端里每次 MCP 调用默认需人批准，双保险
-- server 绑 127.0.0.1（既有配置）
+- server 绑 127.0.0.1——**当前实际绑 0.0.0.0**（`application.yml` 只有 `server.port`、无 `server.address`，`mcp-research.md` 调研发现；MCP 端点开放后 0.0.0.0 意味着局域网可调用写工具），Phase 1 实施时必补 `server.address: 127.0.0.1`
 
 ## 6. Phase 2（候选）：编排 MVP
 

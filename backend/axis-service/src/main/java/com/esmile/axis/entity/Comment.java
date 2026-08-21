@@ -1,6 +1,6 @@
 package com.esmile.axis.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -25,7 +25,7 @@ public class Comment {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "issue_id", nullable = false)
-    @JsonIgnoreProperties({"comments", "project", "hibernateLazyInitializer"})
+    @JsonIgnore
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private Issue issue;

@@ -13,8 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * 启动器交接（agent-dispatch Phase 0）：校验 Issue 所属 Project 的工作目录，
- * 组装 prompt（默认 = 标题 + 描述），交给 {@link TerminalLauncher} 在本机终端打开 Claude。
+ * 启动器交接（agent-dispatch）：校验 Issue 所属 Project 的工作目录，组装 prompt
+ * （默认 = 标题 + 描述 + MCP 回写指令段），交给 {@link TerminalLauncher} 在本机终端打开 Claude。
  */
 @Service
 @RequiredArgsConstructor
@@ -53,9 +53,12 @@ public class DispatchService {
     }
 
     private static String defaultPrompt(Issue issue) {
-        if (issue.getDescription() == null || issue.getDescription().isBlank()) {
-            return issue.getTitle();
-        }
-        return issue.getTitle() + "\n\n" + issue.getDescription();
+        String base = issue.getDescription() == null || issue.getDescription().isBlank()
+                ? issue.getTitle()
+                : issue.getTitle() + "\n\n" + issue.getDescription();
+        // Phase 1 回写指令段：agent 完成后经 axis MCP server 写完成汇报（MCP 未注册时该段为无害噪音）
+        return base + "\n\n---\n任务来自 Axis 任务系统（issue id: " + issue.getId() + "）。"
+                + "完成后请用 axis MCP 工具回写：调用 add_issue_comment 提交完成汇报（改动摘要、跑过的测试、遗留问题）；"
+                + "需要核对需求细节可用 get_issue。";
     }
 }

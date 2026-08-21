@@ -1,5 +1,7 @@
 server:
   port: 7789
+  # 只绑回环地址：MCP server（/mcp）无鉴权，写工具不能对局域网暴露
+  address: 127.0.0.1
 
 spring:
   web:
@@ -57,6 +59,14 @@ spring:
         options:
           model: ${AI_MODEL:gpt-4o-mini}
           temperature: 0.7
+    # MCP server（agent-dispatch Phase 1）：向本地 coding agent 暴露收敛工具面，端点 /mcp。
+    # protocol 必须显式设 STREAMABLE——不设时实测只开旧版 /sse 端点、/mcp 404
+    # （配置元数据 "default: streamable" 有误导，见 .scratch/agent-dispatch/mcp-research.md §2.4）。
+    mcp:
+      server:
+        name: axis
+        version: 0.1.0
+        protocol: STREAMABLE
 
 # CORS configuration
 app:

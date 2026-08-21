@@ -28,6 +28,10 @@ class DispatchServiceTest {
 
     private final DispatchService service = new DispatchService(issueRepository, terminalLauncher);
 
+    private static final String MCP_SUFFIX = "\n\n---\n任务来自 Axis 任务系统（issue id: i1）。"
+            + "完成后请用 axis MCP 工具回写：调用 add_issue_comment 提交完成汇报（改动摘要、跑过的测试、遗留问题）；"
+            + "需要核对需求细节可用 get_issue。";
+
     @TempDir
     Path repoDir;
 
@@ -78,7 +82,7 @@ class DispatchServiceTest {
     void defaultPromptIsTitlePlusDescription() {
         stubIssue(projectWithRepoPath(repoDir.toString()));
         service.dispatch("i1", null, null);
-        verify(terminalLauncher).launch(eq(repoDir.toString()), eq("修复登录页\n\n把按钮改成蓝色"), eq(DispatchTerminal.TERMINAL));
+        verify(terminalLauncher).launch(eq(repoDir.toString()), eq("修复登录页\n\n把按钮改成蓝色" + MCP_SUFFIX), eq(DispatchTerminal.TERMINAL));
     }
 
     @Test
@@ -86,7 +90,7 @@ class DispatchServiceTest {
         Issue issue = stubIssue(projectWithRepoPath(repoDir.toString()));
         issue.setDescription("  ");
         service.dispatch("i1", " ", null);
-        verify(terminalLauncher).launch(eq(repoDir.toString()), eq("修复登录页"), eq(DispatchTerminal.TERMINAL));
+        verify(terminalLauncher).launch(eq(repoDir.toString()), eq("修复登录页" + MCP_SUFFIX), eq(DispatchTerminal.TERMINAL));
     }
 
     @Test
@@ -108,6 +112,6 @@ class DispatchServiceTest {
     void explicitWarpPassedThrough() {
         stubIssue(projectWithRepoPath(repoDir.toString()));
         service.dispatch("i1", null, "warp");
-        verify(terminalLauncher).launch(eq(repoDir.toString()), eq("修复登录页\n\n把按钮改成蓝色"), eq(DispatchTerminal.WARP));
+        verify(terminalLauncher).launch(eq(repoDir.toString()), eq("修复登录页\n\n把按钮改成蓝色" + MCP_SUFFIX), eq(DispatchTerminal.WARP));
     }
 }
