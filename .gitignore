@@ -32,3 +32,6 @@ logs
 .env
 .env.*
 !.env.example
+
+# 个人求职资料，仅本地保留（AI 可见性由 .ignore 白名单恢复）
+docs/career/
