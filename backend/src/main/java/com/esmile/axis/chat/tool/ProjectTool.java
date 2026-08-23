@@ -26,7 +26,7 @@ public class ProjectTool {
             @ToolParam(description = "项目名称") String name,
             @ToolParam(description = "项目描述", required = false) String description) {
         toolCallNotifier.emit("创建项目");
-        Project project = projectService.create(name, description, null, null);
+        Project project = projectService.create(name, description, null, null, null);
         return String.format("✅ 已创建项目：%s (ID: %s)", project.getName(), project.getId());
     }
 

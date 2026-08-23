@@ -24,7 +24,7 @@ public class ProjectController {
 
     @PostMapping
     public Project create(@Valid @RequestBody CreateProjectRequest req) {
-        return projectService.create(req.name(), req.description(), req.status(), req.order());
+        return projectService.create(req.name(), req.description(), req.status(), req.order(), req.repoPath());
     }
 
     @PatchMapping("/{id}")
@@ -44,7 +44,8 @@ public class ProjectController {
             @NotBlank String name,
             String description,
             String status,
-            Integer order
+            Integer order,
+            String repoPath
     ) {
     }
 

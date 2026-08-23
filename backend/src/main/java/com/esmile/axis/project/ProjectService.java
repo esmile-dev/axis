@@ -31,10 +31,11 @@ public class ProjectService {
     }
 
     @Transactional
-    public Project create(String name, String description, String status, Integer order) {
+    public Project create(String name, String description, String status, Integer order, String repoPath) {
         Project project = Project.builder()
                 .name(name)
                 .description(description)
+                .repoPath(repoPath == null || repoPath.isBlank() ? null : repoPath.trim())
                 .status(status != null ? ProjectStatus.valueOf(status) : ProjectStatus.PLANNING)
                 .order(order != null ? order : 0)
                 .build();

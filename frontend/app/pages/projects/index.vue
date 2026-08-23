@@ -7,6 +7,7 @@ interface Project {
   id: string
   name: string
   description: string | null
+  repoPath: string | null
   status: ProjectStatus
   order: number
   createdAt: string
@@ -19,7 +20,7 @@ const localFirst = useLocalFirst<Project>('projects', () => api<Project[]>('/api
 const optimistic = useOptimistic(localFirst)
 
 const showSlidePanel = ref(false)
-const newProject = ref({ name: '', description: '' })
+const newProject = ref({ name: '', description: '', repoPath: '' })
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
   PLANNING: { label: 'Planning', color: 'bg-yellow-500/20 text-yellow-400', icon: Eye },
@@ -33,7 +34,7 @@ function generateTempId(): string {
 }
 
 function openCreatePanel() {
-  newProject.value = { name: '', description: '' }
+  newProject.value = { name: '', description: '', repoPath: '' }
   showSlidePanel.value = true
 }
 
@@ -44,6 +45,7 @@ async function createProject() {
     id: generateTempId(),
     name: newProject.value.name,
     description: newProject.value.description || null,
+    repoPath: newProject.value.repoPath.trim() || null,
     status: 'PLANNING',
     order: 0,
     createdAt: new Date().toISOString(),
@@ -51,7 +53,7 @@ async function createProject() {
   }
   
   showSlidePanel.value = false
-  newProject.value = { name: '', description: '' }
+  newProject.value = { name: '', description: '', repoPath: '' }
   
   await optimistic.optimisticAdd(
     async (project) => {
@@ -60,6 +62,7 @@ async function createProject() {
         body: {
           name: project.name,
           description: project.description,
+          repoPath: project.repoPath,
           status: project.status
         }
       })
@@ -213,6 +216,17 @@ onMounted(() => localFirst.init())
                     placeholder="What is this project about?"
                     class="w-full bg-secondary/50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-ring transition-all resize-none"
                   ></textarea>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium mb-2">Directory</label>
+                  <input
+                    v-model="newProject.repoPath"
+                    type="text"
+                    placeholder="Local repo path (for agent dispatch)"
+                    class="w-full bg-secondary/50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-ring transition-all"
+                    @keyup.enter="createProject"
+                  />
                 </div>
               </div>
               
