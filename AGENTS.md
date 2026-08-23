@@ -70,7 +70,7 @@ cd frontend && npm run build        # 生产构建
 cd frontend && npm run preview      # 预览构建结果
 
 # 后端（端口 7789）
-cd backend && mvn package && java -jar target/axis-server-0.1.0.jar             # 启动（可执行 fat jar）
+cd backend && mvn package && java -jar target/axis-server-0.2.0.jar             # 启动（可执行 fat jar）
 cd backend && mvn compile           # 编译
 cd backend && mvn package           # 打包可执行 fat jar
 ```

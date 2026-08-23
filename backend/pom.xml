@@ -12,7 +12,7 @@
 
     <groupId>com.esmile</groupId>
     <artifactId>axis-server</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <name>axis-server</name>
     <description>AI Station Backend - single module (business domains + AI agent)</description>
 
