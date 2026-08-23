@@ -22,7 +22,7 @@
 ## 技术栈
 
 - **前端**：Nuxt 4 + Vue 3 Composition API + TypeScript；Pinia + VueUse 状态管理；Tailwind CSS + Shadcn-Vue（基于 Reka UI）+ Lucide Vue Next 图标；`marked` 渲染 Markdown
-- **后端**：Spring Boot 4.0 + Spring Framework 7.0 + Java 21；Spring Data JPA + Hibernate；Spring AI 2.0（ChatClient + Tool Calling）；Maven 多模块构建
+- **后端**：Spring Boot 4.0 + Spring Framework 7.0 + Java 21；Spring Data JPA + Hibernate；Spring AI 2.0（ChatClient + Tool Calling）；Spring Modulith 模块边界校验；Maven 单模块构建
 - **数据库**：PostgreSQL 18 + pgvector 扩展（本地默认 `axis` 库；Flyway 管 schema + `ddl-auto: validate`；开发期改表优先改 `V1__init.sql` 后重建本地库，本地数据需保留时写增量迁移——现有 `V2__chat_conversation_summary.sql` 先例；`vector_store` 表由 PgVectorStore 启动时自建）
 
 ## 仓库结构
@@ -37,22 +37,20 @@ frontend/                        # Nuxt 前端（端口 7788）
 ├── nuxt.config.ts               # devServer.port=7788；runtimeConfig.public.apiBase 默认 http://localhost:7789
 └── package.json
 
-backend/                         # Maven 多模块（父 POM packaging=pom，无 Maven Wrapper，用系统 mvn）
+backend/                         # 单 Maven 模块（packaging=jar，artifactId=axis-server；无 Maven Wrapper，用系统 mvn）
 ├── pom.xml
-├── inbox/                       # Daily Digest 输出目录（daily-YYYY-MM-DD.md）
-├── axis-service/                # 业务核心模块（jar，无主类，不可独立启动）
-│   └── src/main/java/com/esmile/axis/
-│       ├── controller/          # REST API：Inbox/Project/Issue/Knowledge/Dispatch/ChatHistory/Config/FileUpload/Health
-│       ├── service/  repository/  entity/  enums/
-│       ├── digest/              # Daily Digest：fetch / classify / summarize / scheduler / service
-│       ├── llm/                 # LLM 可观测性：llm_call_log 事实日志 + 用量聚合 + Micrometer 指标
-│       └── config/              # CORS 等配置
-├── axis-agent/                  # AI Agent 模块（依赖 axis-service，产出可执行 fat jar）
-│   └── src/main/java/com/esmile/axis/
-│       ├── AxisApplication.java # 唯一的 Spring Boot 主类（扫描整个 com.esmile.axis）
-│       ├── config/AiConfig.java # ChatClient / ChatMemory 配置
-│       ├── ai/                  # AgentController + ToolCallNotifier + tool/（Inbox/Issue/Project/Knowledge/Memory 五个 Tool）
-│       └── digest/controller/   # /api/v1/digest REST 入口
+├── inbox/                       # Daily Digest 输出目录（daily-YYYY-MM-DD.md，运行时产物）
+├── uploads/                     # 上传文件（运行时产物，已 gitignore）
+└── src/main/java/com/esmile/axis/
+    ├── AxisApplication.java     # 唯一的 Spring Boot 主类（扫描整个 com.esmile.axis）
+    ├── inbox/                   # Inbox 域：Controller/Service/实体/枚举（含 DigestCategory）
+    ├── project/                 # Project + Issue + Comment 域
+    ├── knowledge/               # Knowledge 域（search/generate/fetch/importer/listener 等子包；dto、search 子包经 @NamedInterface 暴露）
+    ├── digest/                  # Daily Digest 域：fetch / classify / summarize / scheduler / service + DigestController
+    ├── chat/                    # AI Agent 域：AgentService/AgentController + tool/（5 个 Tool）+ mcp/ + 记忆/历史/摘要 + AiConfig(ChatMemory)
+    ├── llm/                     # LLM 接入（ChatGateway、AiConfigService、AI 档案、ConfigController）+ 可观测性（llm_call_log、用量聚合、Micrometer 指标）
+    ├── dispatch/                # Agent Dispatch：派 Issue 给本地 coding agent
+    └── system/                  # WebConfig(CORS)、HealthController、FileUpload
 
 docs/
 ├── agents/                      # Agent 配置：issue tracker（.scratch 约定）/ triage 标签 / domain docs 规则
@@ -60,7 +58,7 @@ docs/
 └── feature/                     # 历史功能文档（旧 Spec-Driven 流产物）；新规格统一落 `.scratch/<feature>/`
 ```
 
-后端配置集中在 `backend/axis-service/src/main/resources/application.yml`（端口、数据源、AI、digest cron/RSS 源均支持环境变量覆盖）。
+后端配置集中在 `backend/src/main/resources/application.yml`（端口、数据源、AI、digest cron/RSS 源均支持环境变量覆盖）。
 
 ## 构建与运行命令
 
@@ -72,7 +70,7 @@ cd frontend && npm run build        # 生产构建
 cd frontend && npm run preview      # 预览构建结果
 
 # 后端（端口 7789）
-cd backend && mvn package && java -jar axis-agent/target/axis-agent-0.1.0.jar   # 启动（Boot 4 下 spring-boot:run 在父 pom 聚合报错，走 fat jar）
+cd backend && mvn package && java -jar target/axis-server-0.1.0.jar             # 启动（可执行 fat jar）
 cd backend && mvn compile           # 编译
 cd backend && mvn package           # 打包可执行 fat jar
 ```
@@ -88,10 +86,10 @@ cd frontend && npx vitest run <file>     # 跑单个测试文件
 
 # 后端
 cd backend && mvn test                                   # 全部测试
-cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
+cd backend && mvn test -Dtest=SomeTest                   # 跑单个测试
 ```
 
-后端测试位于 `backend/axis-service/src/test/java/...`（如 `DailyDigestServiceTest`、`AiConfigServiceTest`、`ConfigControllerTest`）。`mvn test` 前置依赖本地 PostgreSQL 运行（`KnowledgeItemRepositorySearchTest` 直连 `axis` 库）。`digest/summarize/SummarizationEval.java` 是 AI 功能的评测入口（AI 功能验收必须可评测，沿用已归档 `docs/archive/workflow.md` 第 7 条的原则）。
+后端测试位于 `backend/src/test/java/...`（如 `DailyDigestServiceTest`、`AiConfigServiceTest`、`ConfigControllerTest`）。`mvn test` 前置依赖本地 PostgreSQL 运行（`KnowledgeItemRepositorySearchTest` 直连 `axis` 库）。`digest/summarize/SummarizationEval.java` 是 AI 功能的评测入口（AI 功能验收必须可评测，沿用已归档 `docs/archive/workflow.md` 第 7 条的原则）。
 
 **提交前必须测试。未验证 = 未完成。**
 
@@ -99,15 +97,16 @@ cd backend && mvn test -pl axis-service -Dtest=SomeTest  # 跑单个测试
 
 前后端分离：前端通过 `app/composables/useApi.ts`（基于 `runtimeConfig.public.apiBase`，可用环境变量 `AXIS_API_BASE` 覆盖）调用后端 REST API。
 
+- **后端模块结构**：单 Maven 模块 + 按域分包。域包（`inbox/` `project/` `knowledge/` `digest/` `chat/` `llm/` `dispatch/` `system/`）即 Spring Modulith 模块：跨域访问只许走对方域包根（API 包）或 `@NamedInterface` 标注的子包（`knowledge/dto`、`knowledge/search`），域间依赖必须无环——由 `ModularityTest`（`ApplicationModules.verify()`）强制，违规测试红。新类一律进所属域包，禁止复活按层分包（controller/service/repository/entity/enums/config 已清空删除）。
 - **Local-First（首屏秒开）**：`useLocalFirst.ts` — 页面优先从 LocalStorage 读缓存立即渲染，后台静默同步数据库。所有使用此模式的页面必须调用 `init()` 初始化。
 - **Optimistic UI（乐观更新）**：`useOptimistic.ts` — 操作时前端状态先切换，后端静默同步，失败回滚。配合 `useLocalFirst` 使用。
 - **后端调用约定**：一律走 `useApi()` 的 `$fetch` 实例；流式 SSE 端点（`/api/agent/chat`、`/api/agent/expand`）例外，直接用 `fetch + ReadableStream` 绕过 `$fetch`。
-- **AI 聊天（/chat 页）**：SSE 帧为结构化 JSON——`{"type":"token","text"}` / `{"type":"tool","label"}`（由 `ToolCallNotifier` 注入）/ `{"type":"confirm","confirmId","action","detail"}`（危险操作确认请求，见下）/ `{"type":"error","message"}`（LLM 流失败，由 `AgentService.onErrorResume` 映射，后随 done）/ `{"type":"done"}`。短期记忆经 `JpaChatMemoryRepository` 落 `chat_message` 表（滑动窗口 100 条，仅存 USER/ASSISTANT；超窗由 `ConversationSummaryService` 预压缩最旧 30 条滚动合并进 `chat_conversation.summary` 并注入 system prompt，失败静默降级硬截断），会话元数据在 `chat_conversation`（id 由前端 UUID 生成）；长期记忆在 `chat_long_memory` 表，Agent 通过 `MemoryTool` 主动保存，每次请求注入 system prompt（≤50 条）。历史/记忆 REST 在 axis-service 的 `ChatHistoryController`（`/api/agent/conversations*`、`/api/agent/memories*`）。
+- **AI 聊天（/chat 页）**：SSE 帧为结构化 JSON——`{"type":"token","text"}` / `{"type":"tool","label"}`（由 `ToolCallNotifier` 注入）/ `{"type":"confirm","confirmId","action","detail"}`（危险操作确认请求，见下）/ `{"type":"error","message"}`（LLM 流失败，由 `AgentService.onErrorResume` 映射，后随 done）/ `{"type":"done"}`。短期记忆经 `JpaChatMemoryRepository` 落 `chat_message` 表（滑动窗口 100 条，仅存 USER/ASSISTANT；超窗由 `ConversationSummaryService` 预压缩最旧 30 条滚动合并进 `chat_conversation.summary` 并注入 system prompt，失败静默降级硬截断），会话元数据在 `chat_conversation`（id 由前端 UUID 生成）；长期记忆在 `chat_long_memory` 表，Agent 通过 `MemoryTool` 主动保存，每次请求注入 system prompt（≤50 条）。历史/记忆 REST 在 chat 域包的 `ChatHistoryController`（`/api/agent/conversations*`、`/api/agent/memories*`）。
 - **危险操作人工确认（confirmation gate）**：删除类 tool（`deleteIssue`/`deleteInboxItem`/`deleteMemory`）不直接执行——经 `ConfirmationService` 发 confirm SSE 帧并挂起 tool 线程，前端内嵌卡片回调 `POST /api/agent/confirm/{confirmId}`（body `{"approved":bool}`，未知/过期 id 404）才放行。5 分钟超时、无活跃流（`/chat/sync`）、流中断一律按拒绝处理。新增危险 tool 时同样接 `ConfirmationService.awaitApproval`。
-- **Daily Digest**：跨模块功能。逻辑在 axis-service 的 `com.esmile.axis.digest`（RSS 抓取 → 关键词分类 → 写 `inbox_item`，`type=DIGEST`、`readAt=null`，重跑按 `digest_date` 删旧条目，幂等）；REST 入口在 axis-agent 的 `/api/v1/digest/trigger`。Scheduler 按 cron 每天 10/12/14/20/22 点触发。
+- **Daily Digest**：逻辑在 `digest/` 域包（RSS 抓取 → 关键词分类 → 写 `inbox_item`，`type=DIGEST`、`readAt=null`，重跑按 `digest_date` 删旧条目，幂等）；REST 入口为同包 `DigestController` 的 `/api/v1/digest/trigger`。Scheduler 按 cron 每天 10/12/14/20/22 点触发。
 - **LLM 可观测性**：chat 模型调用（`ChatGateway` 全部方法 + `AgentService` 的 chat/chatSync/expandPrd）由 `LlmCallLogger`（`llm/` 包）异步记录 feature/model/token/耗时/成败到 `llm_call_log` 表，并出 Micrometer 指标（业务层 `llm.*` + 模型层 Spring AI 内建 `gen_ai.*`，后者靠 `AiConfigService.buildClient` 传入 `ObservationRegistry` 激活）；`/actuator/metrics` 已暴露。新增 LLM 调用点必须传 `LlmFeature`（`LlmOptions` 强制字段）。用量聚合：`GET /api/v1/llm/usage`（`LlmUsageService.summarize` 纯函数），Settings 页有用量面板；成本按 `ModelPricing` 刊例价估算，未知模型为 null。
 - **Agent Dispatch（派 Issue 给本地 coding agent）**：Phase 0 启动器交接——`POST /api/issues/{id}/dispatch` 校验所属 Project `repo_path`（V3 迁移新增列，可空=无派发入口）后，`dispatch/TerminalLauncher` 生成 .command 临时脚本（quoted heredoc 注入 prompt）在本机终端打开交互式 Claude Code（prompt 为启动参数即自动提交，派发弹窗审查=确认闸门）。终端应用由 Settings 页"终端"偏好决定（localStorage 存储，前端随请求传 `terminal` 参数，默认 TERMINAL）：TERMINAL 经 `open -a Terminal` 直跑脚本；WARP 走 Tab Config TOML（`~/.warp/tab_configs/`，terminal pane `commands` 复用同一脚本）+ `warp://tab_config/<name>` URI（Warp 无 AppleScript/CLI 接口；已有窗口时在其中开新 tab，无窗口才新开窗口）。Axis 不编排 agent，交互/审批/急停全在终端。分期计划见 `.scratch/agent-dispatch/plan.md`（Phase 1 MCP 回写已完成，见下条；Phase 2 编排候选）。
-- **MCP server（agent-dispatch Phase 1 回写闭环）**：axis-agent `ai/mcp/` 包（`AxisMcpTools` 3 个 @Tool + `McpServerConfig` 全应用唯一 `ToolCallbackProvider` Bean）经 `spring-ai-starter-mcp-server-webmvc` 在 `POST /mcp` 暴露收敛工具面（`get_issue`/`add_issue_comment`/`transition_issue_status`；状态白名单仅 BACKLOG/TODO/IN_PROGRESS，DONE/CANCELLED 永远人拖），供本地 coding agent（Claude Code 等）回写；派发默认 prompt 自带回写指令段（issue id + `add_issue_comment` 用法）。`application.yml` 必须显式 `spring.ai.mcp.server.protocol: STREAMABLE`（不设实测只开旧版 `/sse`、/mcp 404），server 已绑 `127.0.0.1`（MCP 无鉴权）。⚠️ MCP server 会收集容器内所有 `ToolCallback(/Provider)` Bean——任何模块新注册这类 Bean 即静默扩大 MCP 暴露面；内部 20+ Agent 工具是 `ChatClient.tools()` 按次绑定，天然不进 MCP 面。注册：`claude mcp add --transport http --scope user axis http://127.0.0.1:7789/mcp`。
+- **MCP server（agent-dispatch Phase 1 回写闭环）**：`chat/mcp/` 包（`AxisMcpTools` 3 个 @Tool + `McpServerConfig` 全应用唯一 `ToolCallbackProvider` Bean）经 `spring-ai-starter-mcp-server-webmvc` 在 `POST /mcp` 暴露收敛工具面（`get_issue`/`add_issue_comment`/`transition_issue_status`；状态白名单仅 BACKLOG/TODO/IN_PROGRESS，DONE/CANCELLED 永远人拖），供本地 coding agent（Claude Code 等）回写；派发默认 prompt 自带回写指令段（issue id + `add_issue_comment` 用法）。`application.yml` 必须显式 `spring.ai.mcp.server.protocol: STREAMABLE`（不设实测只开旧版 `/sse`、/mcp 404），server 已绑 `127.0.0.1`（MCP 无鉴权）。⚠️ MCP server 会收集容器内所有 `ToolCallback(/Provider)` Bean——任何模块新注册这类 Bean 即静默扩大 MCP 暴露面；内部 20+ Agent 工具是 `ChatClient.tools()` 按次绑定，天然不进 MCP 面。注册：`claude mcp add --transport http --scope user axis http://127.0.0.1:7789/mcp`。
 
 ## 数据模型
 

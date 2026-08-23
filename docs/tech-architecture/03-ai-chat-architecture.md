@@ -20,10 +20,10 @@ chat.vue 输入 → useChat.send()（frontend/app/composables/useChat.ts:95）
    │  fetch POST /api/agent/chat {message, sessionId=前端 UUID}
    │  （$fetch 不支持流式，用原生 fetch + ReadableStream）
    ▼
-AgentController.chat()（backend/axis-agent/.../ai/controller/AgentController.java）
+AgentController.chat()（backend/backend/src/main/java/com/esmile/axis/chat/AgentController.java）
    │  @Valid ChatRequest DTO（Bean Validation 拦截空消息）→ 一行委托 AgentService
    ▼
-AgentService.chat()（backend/axis-agent/.../ai/AgentService.java）
+AgentService.chat()（backend/backend/src/main/java/com/esmile/axis/chat/AgentService.java）
    │  ① AiConfigService.get()          取当前激活 profile 构建的 ChatClient（可热切换，见 02 号文档）
    │  ② systemPrompt()                 基础 prompt + chat_long_memory 长期记忆（≤50 条）
    │  ③ MessageChatMemoryAdvisor       按 sessionId 从 chat_message 读窗口历史注入 prompt
@@ -165,11 +165,11 @@ LLM 调用
 请求后：advisor 把「本轮新消息」交给 ChatMemory → 裁剪窗口 → 持久化
 ```
 
-配置（`backend/axis-agent/.../config/AiConfig.java:17-22`）：`MessageWindowChatMemory`（`maxMessages=100`）+ 自定义 `JpaChatMemoryRepository`。
+配置（`backend/backend/src/main/java/com/esmile/axis/chat/AiConfig.java:17-22`）：`MessageWindowChatMemory`（`maxMessages=100`）+ 自定义 `JpaChatMemoryRepository`。
 
 **会话隔离**：`.advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, sessionId))`（`AgentService.chat()`）——conversationId 不从请求体猜，而是显式传进 advisor 上下文。key 必须用框架常量 `ChatMemory.CONVERSATION_ID`（值是 `"chat_memory_conversation_id"`，advisor 内部按此 key 读取）：手写字面量拼错了编译器不报错，运行时会静默退回默认会话 `"default"`，所有会话历史混一起。sessionId 由前端 `crypto.randomUUID()` 生成（`useChat.ts:79,99`），前后端零协商成本。
 
-**持久化实现**（`backend/axis-service/.../config/JpaChatMemoryRepository.java`）的三个关键语义：
+**持久化实现**（`backend/backend/src/main/java/com/esmile/axis/chat/JpaChatMemoryRepository.java`）的三个关键语义：
 
 1. **全量替换**：`MessageWindowChatMemory` 每次 `saveAll` 传入的是**裁剪后的完整窗口**（不是增量），所以 `saveAll()` 先 `deleteByConversationId` 再全量插入（`:52-71`）——追加式写入会导致重复堆积、被淘汰的旧消息永远删不掉。顺带地，`seq` 是窗口内序号，窗口滑动后位置全部前移，全量重写也免去了逐条 diff 和重排。方法级 `@Transactional` 保证「删 + 插」原子，不会出现「删完了插入挂了、历史凭空消失」的中间态。窗口外的旧消息随之被物理删除——「历史展示」和「模型记忆」共用一张表，前端看到的会话历史就是模型实际看到的内容，两者永远不会不一致。
 2. **只落 USER/ASSISTANT**：SYSTEM/TOOL 中间消息不落库（`:59-61`）。工具调用的中间态回放给模型没有价值（还会消耗 token），回放时还原成纯文本对话（`toSpringMessage`，`:80-86`）。
@@ -209,7 +209,7 @@ Spring AI 的 `MessageType` 有四种（对应 OpenAI 的 role）：**SYSTEM / U
 
 - **写入**：`MemoryTool.saveMemory` 是一个普通 Tool，system prompt 里明确告诉模型何时调用（`AgentService.systemPrompt()`）：「当用户表达值得跨会话记住的偏好、习惯或重要事实（或明确要求『记住』）时，调用 saveMemory」。
 - **注入**：`systemPrompt()` 每次请求把 `chat_long_memory` 拼在基础 prompt 尾部（`:61-64`），上限 50 条。注意必须 `findTop50ByOrderByCreatedAtDesc`（取**最新** 50 条）——用 Asc 会让第 51 条起的记忆永远进不了 prompt（2026-08-03 修复）。
-- **管理**：用户也可在聊天页「长期记忆」Dialog 里手动查看/删除（REST 走 axis-service 的 `ChatHistoryController`，`/api/agent/memories*`）。
+- **管理**：用户也可在聊天页「长期记忆」Dialog 里手动查看/删除（REST 走 chat 域包的 `ChatHistoryController`，`/api/agent/memories*`）。
 
 为什么走 prompt 注入而不是塞进对话历史？因为长期记忆是**系统级上下文**（「你是谁、用户是谁」），不是对话内容；放 system prompt 里模型权重最高，也不会被滑动窗口挤掉。
 
@@ -273,14 +273,14 @@ API key 加密存储、掩码返回、401 排查的完整链路见 `02-ai-config
 
 ## 参考代码
 
-- `backend/axis-agent/src/main/java/com/esmile/axis/ai/controller/AgentController.java` — SSE 端点（传输层：DTO 校验 + ChatEvent → SSE 帧映射）
-- `backend/axis-agent/src/main/java/com/esmile/axis/ai/AgentService.java` — 编排层：system prompt、Advisor 装配、双流合并
-- `backend/axis-agent/src/main/java/com/esmile/axis/ai/ChatEvent.java` — sealed 事件类型（Token/Tool/Done）
-- `backend/axis-agent/src/main/java/com/esmile/axis/ai/controller/ChatRequest.java` — 请求 DTO（`@NotBlank` 校验）
-- `backend/axis-agent/src/main/java/com/esmile/axis/ai/ToolCallNotifier.java` — 工具事件桥
-- `backend/axis-agent/src/main/java/com/esmile/axis/ai/tool/` — 五个 Tool
-- `backend/axis-agent/src/main/java/com/esmile/axis/config/AiConfig.java` — ChatMemory Bean
-- `backend/axis-service/src/main/java/com/esmile/axis/config/JpaChatMemoryRepository.java` — 短期记忆持久化
+- `backend/src/main/java/com/esmile/axis/chat/AgentController.java` — SSE 端点（传输层：DTO 校验 + ChatEvent → SSE 帧映射）
+- `backend/src/main/java/com/esmile/axis/chat/AgentService.java` — 编排层：system prompt、Advisor 装配、双流合并
+- `backend/src/main/java/com/esmile/axis/chat/ChatEvent.java` — sealed 事件类型（Token/Tool/Done）
+- `backend/src/main/java/com/esmile/axis/chat/ChatRequest.java` — 请求 DTO（`@NotBlank` 校验）
+- `backend/src/main/java/com/esmile/axis/chat/ToolCallNotifier.java` — 工具事件桥
+- `backend/src/main/java/com/esmile/axis/ai/tool/` — 五个 Tool
+- `backend/src/main/java/com/esmile/axis/chat/AiConfig.java` — ChatMemory Bean
+- `backend/src/main/java/com/esmile/axis/chat/JpaChatMemoryRepository.java` — 短期记忆持久化
 - `frontend/app/composables/useChat.ts` — 前端 SSE 消费与会话状态
 - `docs/feature/chat-box/lite-spec.md` — 功能需求与验收标准
 - `docs/tech-architecture/02-ai-config-api-key-lifecycle.md` — ChatClient 热切换与密钥生命周期

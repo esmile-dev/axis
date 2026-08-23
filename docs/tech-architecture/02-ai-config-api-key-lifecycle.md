@@ -19,7 +19,7 @@ created: 2026-07-26
 Settings 页 (profiles CRUD)
    │  POST /api/v1/config/ai/profiles  {name, apiKey, endpoint, model}
    ▼
-AiConfigService.createProfile()          backend/axis-service/.../config/AiConfigService.java:112
+AiConfigService.createProfile()          backend/backend/src/main/java/com/esmile/axis/llm/AiConfigService.java:112
    │  AES-256 加密 apiKey（Encryptors.delux(password, salt)）
    ▼
 ai_config_profile 表（DB，密文存储，isActive 标记唯一激活项）
@@ -55,8 +55,8 @@ LLM 提供商网关鉴定 → 通过则返回补全；拒绝则 401
 
 | 消费方 | 入口 | 说明 |
 |---|---|---|
-| 聊天 Agent | `axis-agent/.../ai/controller/AgentController.java` | `aiConfigService.get()` 取 client，挂 ChatMemory advisor + 5 个 Tool |
-| Daily Digest | `axis-service/.../digest/summarize/SummarizationService.java` | RSS 文章摘要 |
+| 聊天 Agent | `backend/src/main/java/com/esmile/axis/chat/AgentController.java` | `aiConfigService.get()` 取 client，挂 ChatMemory advisor + 5 个 Tool |
+| Daily Digest | `backend/src/main/java/com/esmile/axis/digest/summarize/SummarizationService.java` | RSS 文章摘要 |
 
 Controller 侧**不注入 ChatClient Bean**，而是注入 `AiConfigService` 调 `.get()`——因为 client 会在「激活/编辑 profile」时被 `reload()` 原子替换（`volatile currentClient`），直接注入拿到的会是启动时的旧实例。`AxisApplication` 也排除了 `OpenAiChatAutoConfiguration`，防止 Spring AI 自动配置再造一个 client 打架。
 
@@ -104,7 +104,7 @@ curl -s -X POST localhost:7789/api/v1/config/ai/profiles/<id>/test
 
 ## 参考代码
 
-- `backend/axis-service/src/main/java/com/esmile/axis/config/AiConfigService.java` — 全部逻辑（存储/加密/解析/热切换/测试）
-- `backend/axis-service/src/main/java/com/esmile/axis/controller/ConfigController.java` — REST 入口 `/api/v1/config/ai*`
-- `backend/axis-agent/src/main/java/com/esmile/axis/AxisApplication.java` — 排除 OpenAI 自动配置
+- `backend/src/main/java/com/esmile/axis/llm/AiConfigService.java` — 全部逻辑（存储/加密/解析/热切换/测试）
+- `backend/src/main/java/com/esmile/axis/llm/ConfigController.java` — REST 入口 `/api/v1/config/ai*`
+- `backend/src/main/java/com/esmile/axis/AxisApplication.java` — 排除 OpenAI 自动配置
 - `docs/feature/ai-config-profiles/lite-spec.md` — 多 profile 功能的需求与设计

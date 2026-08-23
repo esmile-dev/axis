@@ -23,3 +23,6 @@ buildNumber.properties
 
 # Uploads
 uploads/
+
+# Daily Digest 运行时输出
+inbox/

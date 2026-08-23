@@ -180,3 +180,7 @@ Axis 现状：父 POM + `axis-service`（业务核心 jar）+ `axis-agent`（可
 - 示例仓库: [spring-petclinic](https://github.com/spring-projects/spring-petclinic)（[根包](https://github.com/spring-projects/spring-petclinic/tree/main/src/main/java/org/springframework/samples/petclinic) / [owner 包](https://github.com/spring-projects/spring-petclinic/tree/main/src/main/java/org/springframework/samples/petclinic/owner)）
 
 > 调研局限说明：Simon Brown 2015 年原文页面在本环境中无法抓出正文（站点对抓取不友好，web.archive.org 不可达），其内容经作者本人在 simonbrown.je 的重发页核实后引用；JHipster 生成结构（按层分包的知名对照例）因仓库 API 抓取失败未纳入，如需要可补充。
+
+---
+
+> **后记（2026-08-23）**：本调研提出的 A+D 方案已落地——axis-service/axis-agent 合并为 `backend/` 单 Maven 模块（artifactId=axis-server），全部类按域分包（inbox/project/knowledge/digest/chat/llm/dispatch/system），`ModularityTest`（`ApplicationModules.verify()`）常驻测试强制 DAG 与 API-only 访问。文中"Axis 现状"一节描述的是重构前状态，留作历史对照。实施规格与验收：`.scratch/backend-restructure/spec.md`。

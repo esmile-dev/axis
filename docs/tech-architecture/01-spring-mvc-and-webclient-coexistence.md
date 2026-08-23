@@ -15,7 +15,7 @@ created: 2026-07-22
 
 ## 1. 起点：先把「事实」摆出来
 
-打开 `backend/axis-service/pom.xml:18-25`，能看到两个 starter 同时存在：
+打开 `backend/pom.xml`，能看到两个 starter 同时存在：
 
 ```xml
 <dependency>
@@ -33,9 +33,9 @@ created: 2026-07-22
 
 | 文件 | 角色 |
 |---|---|
-| `axis-service/.../digest/config/WebClientConfig.java` | 注册共享的 `WebClient.Builder` Bean（统一 User-Agent / 超时 / 2 MB 上限） |
-| `axis-service/.../digest/fetch/RssFetcher.java:27,40-50` | 出站 HTTP 客户端，去拉外部 RSS/Atom XML |
-| `axis-agent/.../ai/controller/AgentController.java:35,72` | Controller 方法直接返回 `Flux<String>`，给前端 SSE 流式推 AI 回复 |
+| `backend/src/main/java/com/esmile/axis/digest/config/WebClientConfig.java` | 注册共享的 `WebClient.Builder` Bean（统一 User-Agent / 超时 / 2 MB 上限） |
+| `backend/src/main/java/com/esmile/axis/digest/fetch/RssFetcher.java:27,40-50` | 出站 HTTP 客户端，去拉外部 RSS/Atom XML |
+| `backend/src/main/java/com/esmile/axis/chat/AgentController.java:35,72` | Controller 方法直接返回 `Flux<String>`，给前端 SSE 流式推 AI 回复 |
 
 所以真相是**三种角色混在一起**：
 
